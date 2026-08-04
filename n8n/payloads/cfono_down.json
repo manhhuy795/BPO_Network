@@ -1,0 +1,15 @@
+{
+  "du_lieu_thu_nghi": true,
+  "receiver": "n8n_bpo",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {"alertname": "CFONODown", "severity": "medium", "service": "cfono", "environment": "bpo-lab", "site": "345"},
+      "annotations": {"summary": "Dữ liệu thử: CFONO phía đối tác gián đoạn."},
+      "startsAt": "2026-08-03T07:00:30Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "fingerprint": "phase-l-test-cfono-001"
+    }
+  ]
+}

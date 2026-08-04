@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: n8n_bpo
+  group_by: [alertname, environment, site]
+  group_wait: 1s
+  group_interval: 5s
+  repeat_interval: 1h
+
+receivers:
+  - name: n8n_bpo
+    webhook_configs:
+      - url: http://n8n:5678/webhook/bpo-alertmanager
+        send_resolved: true

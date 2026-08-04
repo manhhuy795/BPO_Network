@@ -1,0 +1,346 @@
+name: bpo-network-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    container_name: bpo-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    extra_hosts:
+      - "ubuntu-vm:${UBUNTU_VM_IP}"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - bpo-monitoring
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0
+    container_name: bpo-blackbox
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    extra_hosts:
+      - "ubuntu-vm:${UBUNTU_VM_IP}"
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9115/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - bpo-monitoring
+
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    container_name: bpo-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9093/-/healthy || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      n8n:
+        condition: service_healthy
+    networks:
+      - bpo-monitoring
+
+  postgres:
+    image: postgres:17.10-alpine
+    container_name: bpo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - bpo-monitoring
+
+  database-init:
+    image: postgres:17.10-alpine
+    container_name: bpo-database-init
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-bpo_grafana}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+    volumes:
+      - ../database/init:/database/init:ro
+      - ../database/migrations:/database/migrations:ro
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        for file in /database/init/*.sql /database/migrations/*.sql; do
+          echo "Đang áp dụng $${file}";
+          psql -v ON_ERROR_STOP=1 -v grafana_user="$${GRAFANA_DB_USER}" -v grafana_password="$${GRAFANA_DB_PASSWORD}" -f "$${file}";
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bpo-monitoring
+
+  n8n:
+    image: n8nio/n8n:2.32.7
+    container_name: bpo-n8n
+    restart: unless-stopped
+    environment: &n8n-environment
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: n8n
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_WEBHOOK_URL: http://localhost:5678/
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      # Workflow nội bộ cần đọc các biến SMTP/GLPI đã truyền vào container.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      EMAIL_MODE: ${EMAIL_MODE}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_TO: ${SMTP_TO}
+      GLPI_BASE_URL: http://glpi
+      GLPI_API_USER: ${GLPI_API_USER}
+      GLPI_API_PASSWORD: ${GLPI_API_PASSWORD}
+      GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n-config:
+        condition: service_completed_successfully
+    networks:
+      - bpo-monitoring
+
+  n8n-config:
+    image: n8nio/n8n:2.32.7
+    container_name: bpo-n8n-config
+    restart: "no"
+    environment:
+      <<: *n8n-environment
+      N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL}
+      N8N_OWNER_FIRST_NAME: ${N8N_OWNER_FIRST_NAME}
+      N8N_OWNER_LAST_NAME: ${N8N_OWNER_LAST_NAME}
+      N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD}
+      BPO_WORKFLOW_ID: bpoAlertFlow01
+      BPO_NOTIFICATION_WORKFLOW_ID: bpoNotifyTicket01
+      BPO_CREDENTIAL_ID: bpoPgCred01
+      BPO_GLPI_CREDENTIAL_ID: bpoGlpiBasic01
+      BPO_SMTP_CREDENTIAL_ID: bpoSmtp01
+    entrypoint: ["/bin/sh", "/bootstrap/bootstrap.sh"]
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../n8n:/bootstrap:ro
+    depends_on:
+      database-init:
+        condition: service_completed_successfully
+    networks:
+      - bpo-monitoring
+
+  glpi-db:
+    image: mysql:8.4
+    container_name: bpo-glpi-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${GLPI_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+    volumes:
+      - glpi_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - bpo-monitoring
+
+  glpi:
+    image: glpi/glpi:10.0.26
+    container_name: bpo-glpi
+    restart: unless-stopped
+    environment: &glpi-environment
+      GLPI_DB_HOST: glpi-db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: ${GLPI_DB_NAME}
+      GLPI_DB_USER: ${GLPI_DB_USER}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD}
+      GLPI_CRONTAB_ENABLED: 1
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8080:80"
+    volumes:
+      - glpi_data:/var/glpi
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      glpi-db:
+        condition: service_healthy
+    networks:
+      - bpo-monitoring
+
+  glpi-init:
+    image: glpi/glpi:10.0.26
+    container_name: bpo-glpi-init
+    restart: "no"
+    environment:
+      <<: *glpi-environment
+    volumes:
+      - glpi_data:/var/glpi
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /var/www/glpi/bin/console config:set enable_api 1
+        && /var/www/glpi/bin/console config:set enable_api_login_credentials 1
+        && echo "Đã bật API GLPI."
+    depends_on:
+      glpi:
+        condition: service_healthy
+    networks:
+      - bpo-monitoring
+
+  glpi-api-init:
+    image: mysql:8.4
+    container_name: bpo-glpi-api-init
+    restart: "no"
+    environment:
+      MYSQL_PWD: ${GLPI_DB_PASSWORD}
+      GLPI_DB_NAME: ${GLPI_DB_NAME}
+      GLPI_DB_USER: ${GLPI_DB_USER}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mysql -h glpi-db -u"$${GLPI_DB_USER}" "$${GLPI_DB_NAME}"
+        --execute="INSERT INTO glpi_apiclients
+        (entities_id, is_recursive, name, date_mod, date_creation, is_active,
+        ipv4_range_start, ipv4_range_end, dolog_method, comment)
+        SELECT 0, 1, 'BPO Docker noi bo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+        1, INET_ATON('172.18.0.0'), INET_ATON('172.18.255.255'), 0,
+        'Chi cho phep n8n va may chu Docker cua phong thi nghiem BPO'
+        WHERE NOT EXISTS (SELECT 1 FROM glpi_apiclients WHERE name='BPO Docker noi bo');
+        UPDATE glpi_apiclients SET is_active=1,
+        ipv4_range_start=INET_ATON('172.18.0.0'),
+        ipv4_range_end=INET_ATON('172.18.255.255'), date_mod=CURRENT_TIMESTAMP
+        WHERE name='BPO Docker noi bo';"
+        && echo "Đã giới hạn API GLPI cho mạng Docker nội bộ."
+    depends_on:
+      glpi-db:
+        condition: service_healthy
+      glpi-init:
+        condition: service_completed_successfully
+    networks:
+      - bpo-monitoring
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    container_name: bpo-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${N8N_OWNER_PASSWORD}}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      POSTGRES_DB: ${POSTGRES_DB}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-bpo_grafana}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      database-init:
+        condition: service_completed_successfully
+    networks:
+      - bpo-monitoring
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  postgres_data:
+  n8n_data:
+  glpi_db_data:
+  glpi_data:
+  grafana_data:
+
+networks:
+  bpo-monitoring:

@@ -1,0 +1,162 @@
+{
+  "annotations": { "list": [] },
+  "description": "Tổng quan mạng, chất lượng WAN, dịch vụ đối tác, sự cố đã gom nhóm và phiếu GLPI của trụ sở BPO 345.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Trạng thái FPT", "gridPos": { "h": 4, "w": 3, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_link_up{provider=\"fpt\"}", "legendFormat": "FPT", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Trạng thái Viettel", "gridPos": { "h": 4, "w": 3, "x": 3, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_link_up{provider=\"viettel\"}", "legendFormat": "Viettel", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Đường WAN đang sử dụng", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_active_link", "legendFormat": "{{provider}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "dark-gray", "text": "DỰ PHÒNG" }, "1": { "color": "green", "text": "ĐANG DÙNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "dark-gray", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Dịch vụ CRM", "gridPos": { "h": 4, "w": 3, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_service_up{service=\"crm\"}", "legendFormat": "CRM", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 5, "type": "stat", "title": "Dịch vụ CFONO", "gridPos": { "h": 4, "w": 3, "x": 15, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_service_up{service=\"cfono\"}", "legendFormat": "CFONO", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 6, "type": "stat", "title": "Ubuntu exporter", "gridPos": { "h": 4, "w": 3, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "up{job=\"bpo-exporter\"}", "legendFormat": "Exporter", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 7, "type": "stat", "title": "Sự cố đang mở", "gridPos": { "h": 4, "w": 3, "x": 21, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{ "format": "time_series", "rawQuery": true, "rawSql": "SELECT NOW() AS time, count(*)::double precision AS value FROM incidents WHERE status='open';", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 5 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 8, "type": "stat", "title": "Sự cố mức cao đang mở", "gridPos": { "h": 4, "w": 4, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{ "format": "time_series", "rawQuery": true, "rawSql": "SELECT NOW() AS time, count(*)::double precision AS value FROM incidents WHERE status='open' AND severity='cao';", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 9, "type": "stat", "title": "Failover gần nhất", "gridPos": { "h": 4, "w": 5, "x": 4, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_failover_duration_seconds", "legendFormat": "Failover", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 10 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 10, "type": "stat", "title": "Failback gần nhất", "gridPos": { "h": 4, "w": 5, "x": 9, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_failback_duration_seconds", "legendFormat": "Failback", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 20 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Số lần FPT gặp lỗi", "gridPos": { "h": 4, "w": 5, "x": 14, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "ceil(changes(bpo_link_up{provider=\"fpt\"}[$__range]) / 2)", "legendFormat": "FPT", "refId": "A" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Số lần chuyển sang Viettel", "gridPos": { "h": 4, "w": 5, "x": 19, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "ceil(changes(bpo_active_link{provider=\"viettel\"}[$__range]) / 2)", "legendFormat": "Viettel", "refId": "A" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    },
+    {
+      "id": 13, "type": "timeseries", "title": "Độ trễ FPT và Viettel", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_latency_ms", "legendFormat": "{{provider}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12, "showPoints": "never", "spanNulls": true }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 100 }, { "color": "red", "value": 200 }] } }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull", "mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 14, "type": "timeseries", "title": "Tỷ lệ mất gói", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [{ "expr": "bpo_packet_loss_percent", "legendFormat": "{{provider}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12, "showPoints": "never", "spanNulls": true }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }] } }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull", "mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 15, "type": "timeseries", "title": "Lịch sử thời gian failover và failback", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
+      "targets": [
+        { "expr": "bpo_failover_duration_seconds", "legendFormat": "Failover", "refId": "A" },
+        { "expr": "bpo_failback_duration_seconds", "legendFormat": "Failback", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 16, "type": "table", "title": "Danh sách sự cố", "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{
+        "format": "table", "rawQuery": true, "refId": "A",
+        "rawSql": "SELECT i.id AS \"Mã\", i.title AS \"Sự cố\", CASE i.severity WHEN 'cao' THEN 'Cao' WHEN 'trung_binh' THEN 'Trung bình' ELSE 'Thấp' END AS \"Mức độ\", CASE i.status WHEN 'open' THEN 'Đang mở' ELSE 'Đã phục hồi' END AS \"Trạng thái\", i.suspected_cause AS \"Nguyên nhân nghi ngờ\", timezone('Asia/Ho_Chi_Minh', i.first_seen) AS \"Bắt đầu\", i.alert_count AS \"Số cảnh báo\", COALESCE(CASE x.glpi_status WHEN 'open' THEN 'Đang mở' WHEN 'closed' THEN 'Đã đóng' WHEN 'failed' THEN 'Lỗi đồng bộ' ELSE 'Đang chờ' END, 'Chưa tạo') AS \"Phiếu GLPI\", timezone('Asia/Ho_Chi_Minh', i.resolved_at) AS \"Phục hồi\" FROM incidents i LEFT JOIN incident_integrations x ON x.incident_id=i.id WHERE $__timeFilter(i.first_seen) ORDER BY CASE WHEN i.status='open' THEN 0 ELSE 1 END, i.severity='cao' DESC, i.last_seen DESC LIMIT 200;"
+      }],
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false } }, "overrides": [] },
+      "options": { "cellHeight": "sm", "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true, "sortBy": [] }
+    },
+    {
+      "id": 17, "type": "bargauge", "title": "Số sự cố theo loại", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 34 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{ "format": "table", "rawQuery": true, "refId": "A", "rawSql": "SELECT CASE WHEN incident_key LIKE 'wan-quality:%' THEN 'Chất lượng WAN' WHEN incident_key LIKE 'wan-%' THEN 'Sự cố WAN' WHEN incident_key LIKE 'service-%' THEN 'Dịch vụ đối tác' WHEN incident_key='monitoring-exporter' THEN 'Hệ thống giám sát' ELSE 'Khác' END AS metric, count(*)::double precision AS value FROM incidents WHERE $__timeFilter(first_seen) GROUP BY 1 ORDER BY 2 DESC;" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 }] } }, "overrides": [] },
+      "options": { "displayMode": "gradient", "maxVizHeight": 300, "minVizHeight": 16, "minVizWidth": 8, "namePlacement": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "showUnfilled": true, "sizing": "auto", "text": { "titleSize": 14, "valueSize": 14 }, "valueMode": "color" }
+    },
+    {
+      "id": 18, "type": "bargauge", "title": "Số sự cố theo mức độ", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 34 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{ "format": "table", "rawQuery": true, "refId": "A", "rawSql": "SELECT CASE severity WHEN 'cao' THEN 'Cao' WHEN 'trung_binh' THEN 'Trung bình' ELSE 'Thấp' END AS metric, count(*)::double precision AS value FROM incidents WHERE $__timeFilter(first_seen) GROUP BY severity ORDER BY value DESC;" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 }] } }, "overrides": [] },
+      "options": { "displayMode": "gradient", "maxVizHeight": 300, "minVizHeight": 16, "minVizWidth": 8, "namePlacement": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "showUnfilled": true, "sizing": "auto", "text": { "titleSize": 14, "valueSize": 14 }, "valueMode": "color" }
+    },
+    {
+      "id": 19, "type": "stat", "title": "Thời gian xử lý trung bình", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 34 },
+      "datasource": { "type": "postgres", "uid": "bpo-postgres" },
+      "targets": [{ "format": "time_series", "rawQuery": true, "refId": "A", "rawSql": "SELECT NOW() AS time, avg(EXTRACT(EPOCH FROM (resolved_at-first_seen)))::double precision AS value FROM incidents WHERE status='resolved' AND resolved_at IS NOT NULL AND $__timeFilter(first_seen);" }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 300 }, { "color": "red", "value": 900 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 42,
+  "tags": ["BPO", "Trụ sở 345", "Mạng"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "BPO 345 - Giám sát mạng và sự cố",
+  "uid": "bpo-network-overview",
+  "version": 1,
+  "weekStart": "monday"
+}

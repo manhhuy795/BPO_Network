@@ -1,0 +1,258 @@
+{
+  "name": "BPO - Chuẩn hóa và gom nhóm cảnh báo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bpo-alertmanager",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1c947b38-4b07-4d42-bce7-a9324f8a7b01",
+      "name": "Nhận cảnh báo từ Alertmanager",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-960, 0],
+      "webhookId": "bpo-alertmanager"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first().json;\nconst payload = input.body ?? input;\nlet loi = '';\nif (!payload || typeof payload !== 'object' || Array.isArray(payload)) loi = 'Payload phải là một đối tượng JSON.';\nelse if (!Array.isArray(payload.alerts) || payload.alerts.length === 0) loi = 'Trường alerts phải là mảng không rỗng.';\nelse {\n  for (const [index, alert] of payload.alerts.entries()) {\n    const status = alert?.status ?? payload.status;\n    if (!alert || typeof alert !== 'object' || Array.isArray(alert)) { loi = `Cảnh báo thứ ${index + 1} không hợp lệ.`; break; }\n    if (!['firing', 'resolved'].includes(status)) { loi = `Cảnh báo thứ ${index + 1} thiếu trạng thái hợp lệ.`; break; }\n    if (!alert.labels?.alertname || !alert.fingerprint || !alert.startsAt || Number.isNaN(Date.parse(alert.startsAt))) { loi = `Cảnh báo thứ ${index + 1} thiếu alertname, fingerprint hoặc startsAt.`; break; }\n    if (status === 'resolved' && (!alert.endsAt || Number.isNaN(Date.parse(alert.endsAt)))) { loi = `Cảnh báo phục hồi thứ ${index + 1} thiếu endsAt.`; break; }\n  }\n}\nreturn [{ json: loi ? { trang_thai_kiem_tra: 'khong_hop_le', status: 'invalid', thong_bao: loi } : { trang_thai_kiem_tra: 'hop_le', payload } }];"
+      },
+      "id": "c0a8e600-786f-4b0e-b05f-ddc61cd2c502",
+      "name": "Kiểm tra payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-736, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4ce3e71c-f71b-45e4-a564-5d10917bb303",
+              "leftValue": "={{ $json.trang_thai_kiem_tra }}",
+              "rightValue": "hop_le",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ee797a66-d54e-4e2d-a765-f58c0dc70304",
+      "name": "Payload hợp lệ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-512, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const payload = $input.first().json.payload;\nreturn payload.alerts.map((alert) => ({ json: { payload_goc: payload, alert, status_nhom: payload.status } }));"
+      },
+      "id": "c9fca217-8859-44ba-8126-093c40e5ee05",
+      "name": "Tách từng cảnh báo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-272, -112]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const { payload_goc: payload, alert, status_nhom } = $json;\nconst labels = alert.labels ?? {};\nconst annotations = alert.annotations ?? {};\nconst status = alert.status ?? status_nhom;\nconst rawSeverity = String(labels.severity ?? annotations.severity ?? 'info').toLowerCase();\nconst severity = ['high', 'critical', 'cao'].includes(rawSeverity) ? 'cao' : ['medium', 'warning', 'trung_binh'].includes(rawSeverity) ? 'trung_binh' : 'thap';\nreturn {\n  fingerprint: String(alert.fingerprint),\n  status,\n  alert_name: String(labels.alertname),\n  severity,\n  provider: labels.provider ? String(labels.provider).toLowerCase() : null,\n  service: labels.service ? String(labels.service).toLowerCase() : null,\n  vlan: labels.vlan ? String(labels.vlan) : null,\n  project_name: labels.project_name ?? labels.project ?? null,\n  instance: labels.instance ?? null,\n  job: labels.job ?? null,\n  starts_at: new Date(alert.startsAt).toISOString(),\n  ends_at: alert.endsAt && !alert.endsAt.startsWith('0001-') ? new Date(alert.endsAt).toISOString() : null,\n  received_at: new Date().toISOString(),\n  summary: annotations.summary ?? null,\n  description: annotations.description ?? null,\n  payload: { receiver: payload.receiver ?? null, status: payload.status ?? null, alert }\n};"
+      },
+      "id": "acb97f34-7075-4447-bdfb-684793177206",
+      "name": "Chuẩn hóa cảnh báo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-48, -112]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const parts = [$json.fingerprint, $json.status, $json.starts_at];\nif ($json.status === 'resolved') parts.push($json.ends_at);\nreturn { ...$json, event_key: parts.join('|') };"
+      },
+      "id": "950563ae-e341-4bd0-90b8-16dc6f5a1307",
+      "name": "Tạo khóa sự kiện",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [176, -112]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM process_bpo_alert($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "id": "ef7d2c02-c39b-4675-a5bf-42e282da9c08",
+      "name": "Chống trùng và gom nhóm trong PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [416, -112],
+      "credentials": {
+        "postgres": {
+          "id": "bpoPgCred01",
+          "name": "PostgreSQL nghiệp vụ BPO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bpo_prepare_notification($1::bigint, $2::text, $3::bigint) AS action;",
+        "options": {
+          "queryReplacement": "={{ [$json.raw_alert_id, $json.result_status, $json.result_incident_id] }}"
+        }
+      },
+      "id": "9e542985-feba-45c7-a89e-920db3ee54a1",
+      "name": "Chuẩn bị thông báo và phiếu",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [656, -112],
+      "credentials": {
+        "postgres": {
+          "id": "bpoPgCred01",
+          "name": "PostgreSQL nghiệp vụ BPO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return $json.action;"
+      },
+      "id": "66d2868a-9c60-4196-bb35-f6ab9afc751a",
+      "name": "Nhận quyết định thông báo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [896, -112]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const results = $input.all().map((item) => item.json);\nconst states = results.map((item) => item.result_status);\nlet status = states.every((value) => value === 'duplicate') ? 'duplicate' : states.every((value) => value === 'resolved') ? 'resolved' : states.includes('created') ? 'created' : 'updated';\nconst messages = { created: 'Cảnh báo đã được lưu và tạo sự cố.', updated: 'Cảnh báo đã được lưu và cập nhật sự cố.', duplicate: 'Sự kiện trùng đã được bỏ qua.', resolved: 'Trạng thái phục hồi đã được xử lý.' };\nreturn [{ json: { status, thong_bao: messages[status], so_canh_bao: results.length, ket_qua: results } }];"
+      },
+      "id": "45d922f6-98a3-49d6-9c9c-95ac1603ed09",
+      "name": "Tổng hợp kết quả",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1136, -112]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "bpoNotifyTicket01",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "3e0e75bd-475b-47c5-8fd7-80ea2504d85b",
+      "name": "Gửi thông báo và đồng bộ GLPI",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1376, -224]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 200,
+          "enableStreaming": false
+        }
+      },
+      "id": "9ced0751-b26c-4cc5-a610-ac27fb838710",
+      "name": "Trả kết quả thành công",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1376, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 400,
+          "enableStreaming": false
+        }
+      },
+      "id": "7042cd13-a301-4526-a4b7-eb92c6e3a311",
+      "name": "Trả lỗi payload",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [-272, 144]
+    }
+  ],
+  "connections": {
+    "Nhận cảnh báo từ Alertmanager": {
+      "main": [[{"node": "Kiểm tra payload", "type": "main", "index": 0}]]
+    },
+    "Kiểm tra payload": {
+      "main": [[{"node": "Payload hợp lệ?", "type": "main", "index": 0}]]
+    },
+    "Payload hợp lệ?": {
+      "main": [
+        [{"node": "Tách từng cảnh báo", "type": "main", "index": 0}],
+        [{"node": "Trả lỗi payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Tách từng cảnh báo": {
+      "main": [[{"node": "Chuẩn hóa cảnh báo", "type": "main", "index": 0}]]
+    },
+    "Chuẩn hóa cảnh báo": {
+      "main": [[{"node": "Tạo khóa sự kiện", "type": "main", "index": 0}]]
+    },
+    "Tạo khóa sự kiện": {
+      "main": [[{"node": "Chống trùng và gom nhóm trong PostgreSQL", "type": "main", "index": 0}]]
+    },
+    "Chống trùng và gom nhóm trong PostgreSQL": {
+      "main": [[{"node": "Chuẩn bị thông báo và phiếu", "type": "main", "index": 0}]]
+    },
+    "Chuẩn bị thông báo và phiếu": {
+      "main": [[{"node": "Nhận quyết định thông báo", "type": "main", "index": 0}]]
+    },
+    "Nhận quyết định thông báo": {
+      "main": [[{"node": "Tổng hợp kết quả", "type": "main", "index": 0}]]
+    },
+    "Tổng hợp kết quả": {
+      "main": [[
+        {"node": "Gửi thông báo và đồng bộ GLPI", "type": "main", "index": 0},
+        {"node": "Trả kết quả thành công", "type": "main", "index": 0}
+      ]]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "82318e59-277c-40fc-b4a4-a0e314ce3012",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "bpoAlertFlow01",
+  "tags": []
+}

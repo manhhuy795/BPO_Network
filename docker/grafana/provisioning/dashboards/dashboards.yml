@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: Dashboard BPO 345
+    orgId: 1
+    folder: BPO 345
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

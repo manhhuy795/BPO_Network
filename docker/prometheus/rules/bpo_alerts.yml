@@ -1,0 +1,96 @@
+groups:
+  - name: bpo_network_alerts
+    interval: 5s
+    rules:
+      - alert: BPOExporterDown
+        expr: up{job="bpo_exporter"} == 0
+        for: 10s
+        labels:
+          severity: cao
+          category: monitoring
+        annotations:
+          summary: "Không thu thập được BPO exporter"
+          description: "Prometheus không thể lấy số liệu từ exporter trên Ubuntu VM."
+          suspected_cause: "Exporter dừng, cổng 9105 bị chặn hoặc Ubuntu VM mất kết nối."
+
+      - alert: FPTDownViettelAvailable
+        expr: |
+          (bpo_link_up{provider="fpt"} == 0)
+          and on(instance, job) (bpo_link_up{provider="viettel"} == 1)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 10s
+        labels:
+          severity: trung_binh
+          category: wan
+        annotations:
+          summary: "FPT mất, Viettel còn hoạt động"
+          description: "Đường FPT không hoạt động nhưng đường dự phòng Viettel vẫn sẵn sàng."
+          suspected_cause: "Sự cố tuyến FPT hoặc interface FPT của router doanh nghiệp."
+
+      - alert: BothWANDown
+        expr: |
+          (bpo_link_up{provider="fpt"} == 0)
+          and on(instance, job) (bpo_link_up{provider="viettel"} == 0)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 10s
+        labels:
+          severity: cao
+          category: wan
+        annotations:
+          summary: "Cả FPT và Viettel đều mất"
+          description: "Hai đường WAN cùng không hoạt động; đây là cảnh báo mất Internet chính."
+          suspected_cause: "Router doanh nghiệp, kết nối chung hoặc đồng thời hai tuyến nhà mạng gặp lỗi."
+
+      - alert: CRMDown
+        expr: |
+          (bpo_service_up{service="crm"} == 0)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 10s
+        labels:
+          severity: trung_binh
+          category: service
+        annotations:
+          summary: "Dịch vụ CRM phía đối tác dừng"
+          description: "Tiến trình CRM không hoạt động trong khi exporter vẫn truy cập được."
+          suspected_cause: "HTTP server CRM dừng hoặc tiến trình CRM gặp lỗi độc lập."
+
+      - alert: CFONODown
+        expr: |
+          (bpo_service_up{service="cfono"} == 0)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 10s
+        labels:
+          severity: trung_binh
+          category: service
+        annotations:
+          summary: "Dịch vụ CFONO phía đối tác dừng"
+          description: "Tiến trình CFONO không hoạt động trong khi exporter vẫn truy cập được."
+          suspected_cause: "HTTP server CFONO dừng hoặc tiến trình CFONO gặp lỗi độc lập."
+
+      - alert: HighPacketLoss
+        expr: |
+          (bpo_packet_loss_percent > 20)
+          and on(instance, job, provider) (bpo_link_up == 1)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 15s
+        labels:
+          severity: trung_binh
+          category: performance
+        annotations:
+          summary: "Tỷ lệ mất gói WAN cao"
+          description: "Tuyến {{ $labels.provider }} mất trên 20% gói trong khi link vẫn UP."
+          suspected_cause: "Nghẽn mạng, lỗi vật lý chập chờn hoặc chất lượng tuyến nhà mạng suy giảm."
+
+      - alert: HighLatency
+        expr: |
+          (bpo_latency_ms > 100)
+          and on(instance, job, provider) (bpo_link_up == 1)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 30s
+        labels:
+          severity: thap
+          category: performance
+        annotations:
+          summary: "Độ trễ WAN cao"
+          description: "Độ trễ tuyến {{ $labels.provider }} vượt 100 ms trong khi link vẫn UP."
+          suspected_cause: "Tuyến nhà mạng nghẽn, định tuyến vòng hoặc chất lượng kết nối suy giảm."

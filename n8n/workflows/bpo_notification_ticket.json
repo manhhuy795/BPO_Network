@@ -1,0 +1,360 @@
+{
+  "name": "BPO - Thông báo email và phiếu GLPI",
+  "nodes": [
+    {
+      "parameters": { "inputSource": "passthrough" },
+      "id": "b2e5ebd2-8e87-4e30-84d8-815091862ef5",
+      "name": "Nhận sự cố cần thông báo",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [-1120, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const summary = $input.first().json;\nreturn (summary.ket_qua ?? []).map((action) => ({ json: action }));"
+      },
+      "id": "508fd629-63ce-4882-b48c-920e0ff8944a",
+      "name": "Tách hành động cần xử lý",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-896, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{
+            "id": "b8a3dc26-346d-48dc-8225-c6374873aa55",
+            "leftValue": "={{ String($json.should_notify) }}",
+            "rightValue": "true",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d9300a1-3b4e-43ac-89df-acdea35c2dbb",
+      "name": "Có sự kiện cần thông báo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-672, 0]
+    },
+    {
+      "parameters": {
+        "url": "http://prometheus:9090/api/v1/query",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "query", "value": "bpo_active_link == 1" }] },
+        "options": {}
+      },
+      "id": "8eef36dc-aa04-45cc-bf0f-cb9235439449",
+      "name": "Tra cứu WAN hiện tại",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-448, -112],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const action = $('Tách hành động cần xử lý').item.json;\nconst links = ($json.data?.result ?? []).map((row) => String(row.metric?.provider ?? '').toUpperCase()).filter(Boolean);\nconst activeWan = links.length ? links.join(', ') : 'Không xác định được từ Prometheus';\nreturn { ...action, email_body: action.email_body.replace('{{WAN_ACTIVE}}', activeWan), active_wan: activeWan };"
+      },
+      "id": "30dfe70c-4dc2-43f0-a7c3-a66d9499eb36",
+      "name": "Bổ sung WAN hiện tại",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-224, -112]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{
+            "id": "9f91394f-399c-4f93-99d4-f5b6d0e780ef",
+            "leftValue": "={{ String($json.send_email) }}",
+            "rightValue": "true",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "07f23a86-4869-4050-8a7b-ce7acfc27c63",
+      "name": "Cần xử lý email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [0, -224]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{
+            "id": "bf145137-8b1b-4084-a834-75a1961dc2dc",
+            "leftValue": "={{ $env.EMAIL_MODE }}",
+            "rightValue": "smtp",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "63c690ff-1231-4b8c-ae02-48c288df3ba7",
+      "name": "Đã cấu hình SMTP thật?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [224, -320]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $env.SMTP_TO }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.email_body }}",
+        "options": { "appendAttribution": false }
+      },
+      "id": "90425f44-4ceb-4c40-83ea-699ba08312ae",
+      "name": "Gửi email qua SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [448, -416],
+      "credentials": { "smtp": { "id": "bpoSmtp01", "name": "SMTP thông báo BPO" } },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bpo_mark_email_content($1::bigint, 'sent', $2::text) AS ok;",
+        "options": { "queryReplacement": "={{ [$('Bổ sung WAN hiện tại').item.json.notification_id, $('Bổ sung WAN hiện tại').item.json.email_body] }}" }
+      },
+      "id": "4e872d5f-16de-4903-8c57-ab757f9d006a",
+      "name": "Ghi nhận email đã gửi",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [672, -416],
+      "credentials": { "postgres": { "id": "bpoPgCred01", "name": "PostgreSQL nghiệp vụ BPO" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bpo_mark_email_content($1::bigint, 'logged', $2::text) AS ok;",
+        "options": { "queryReplacement": "={{ [$json.notification_id, $json.email_body] }}" }
+      },
+      "id": "706cab6c-bc9d-44ea-aa4c-77741dcab251",
+      "name": "Ghi email vào nhật ký thử nghiệm",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [448, -224],
+      "credentials": { "postgres": { "id": "bpoPgCred01", "name": "PostgreSQL nghiệp vụ BPO" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{
+            "id": "3583aeb7-8644-4c69-be9b-ecaf0b89b1aa",
+            "leftValue": "={{ String($json.sync_glpi) }}",
+            "rightValue": "true",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b50306f2-35aa-4fea-bbb2-fb14d08f9b4b",
+      "name": "Cần đồng bộ GLPI?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [0, 80]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GLPI_BASE_URL }}/apirest.php/initSession",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "86468d1b-ad7d-4f38-8e41-e8af658e4125",
+      "name": "Mở phiên GLPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [224, 80],
+      "credentials": { "httpBasicAuth": { "id": "bpoGlpiBasic01", "name": "GLPI API nội bộ BPO" } },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{
+            "id": "2971f636-3c08-456c-888a-3e2c199b3b11",
+            "leftValue": "={{ $('Bổ sung WAN hiện tại').item.json.glpi_action }}",
+            "rightValue": "create",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "de8850b6-e63d-454b-a6bf-1802758ccc7c",
+      "name": "Tạo phiếu mới?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [448, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GLPI_BASE_URL }}/apirest.php/Ticket/",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Session-Token", "value": "={{ $('Mở phiên GLPI').item.json.session_token }}" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { name: $('Bổ sung WAN hiện tại').item.json.email_subject, content: $('Bổ sung WAN hiện tại').item.json.email_body, priority: $('Bổ sung WAN hiện tại').item.json.glpi_priority, status: 2, type: 1 } } }}",
+        "options": {}
+      },
+      "id": "898e8317-63d7-4b2e-926b-e01f6c99dbaa",
+      "name": "Tạo phiếu GLPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [672, -16],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bpo_mark_glpi($1::bigint, $2::bigint, $3::bigint, 'created') AS ok;",
+        "options": { "queryReplacement": "={{ [$('Bổ sung WAN hiện tại').item.json.notification_id, $('Bổ sung WAN hiện tại').item.json.incident_id, $json.id] }}" }
+      },
+      "id": "7bcc80cd-3835-4838-9126-da02869b0c67",
+      "name": "Lưu mã phiếu GLPI",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [896, -16],
+      "credentials": { "postgres": { "id": "bpoPgCred01", "name": "PostgreSQL nghiệp vụ BPO" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GLPI_BASE_URL }}/apirest.php/ITILFollowup/",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Session-Token", "value": "={{ $('Mở phiên GLPI').item.json.session_token }}" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { itemtype: 'Ticket', items_id: $('Bổ sung WAN hiện tại').item.json.glpi_ticket_id, content: ($('Bổ sung WAN hiện tại').item.json.event_type === 'resolved' ? 'Ghi chú phục hồi: ' : 'Cập nhật sự cố: ') + $('Bổ sung WAN hiện tại').item.json.email_body } } }}",
+        "options": {}
+      },
+      "id": "a7b686a2-959b-4750-9e4b-a14c428b8f1d",
+      "name": "Thêm ghi chú vào phiếu cũ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [672, 176],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GLPI_BASE_URL }}/apirest.php/Ticket/{{ $('Bổ sung WAN hiện tại').item.json.glpi_ticket_id }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Session-Token", "value": "={{ $('Mở phiên GLPI').item.json.session_token }}" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { id: $('Bổ sung WAN hiện tại').item.json.glpi_ticket_id, name: $('Bổ sung WAN hiện tại').item.json.email_subject, priority: $('Bổ sung WAN hiện tại').item.json.glpi_priority, status: $('Bổ sung WAN hiện tại').item.json.glpi_action === 'close' ? 6 : 2 } } }}",
+        "options": {}
+      },
+      "id": "b27d0d27-d931-46b7-ae8b-e00837257463",
+      "name": "Cập nhật hoặc đóng phiếu GLPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [896, 176],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bpo_mark_glpi($1::bigint, $2::bigint, $3::bigint, $4::text) AS ok;",
+        "options": { "queryReplacement": "={{ [$('Bổ sung WAN hiện tại').item.json.notification_id, $('Bổ sung WAN hiện tại').item.json.incident_id, $('Bổ sung WAN hiện tại').item.json.glpi_ticket_id, $('Bổ sung WAN hiện tại').item.json.glpi_action === 'close' ? 'closed' : 'updated'] }}" }
+      },
+      "id": "300459a2-f125-4a9a-93b7-7ca3543af2ce",
+      "name": "Ghi nhận phiếu đã cập nhật",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [1120, 176],
+      "credentials": { "postgres": { "id": "bpoPgCred01", "name": "PostgreSQL nghiệp vụ BPO" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GLPI_BASE_URL }}/apirest.php/killSession",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Session-Token", "value": "={{ $('Mở phiên GLPI').item.json.session_token }}" }] },
+        "options": {}
+      },
+      "id": "caa29a52-d98c-46ca-9fae-1f1e4225633c",
+      "name": "Kết thúc phiên GLPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1344, 80]
+    }
+  ],
+  "connections": {
+    "Nhận sự cố cần thông báo": { "main": [[{ "node": "Tách hành động cần xử lý", "type": "main", "index": 0 }]] },
+    "Tách hành động cần xử lý": { "main": [[{ "node": "Có sự kiện cần thông báo?", "type": "main", "index": 0 }]] },
+    "Có sự kiện cần thông báo?": { "main": [[{ "node": "Tra cứu WAN hiện tại", "type": "main", "index": 0 }], []] },
+    "Tra cứu WAN hiện tại": { "main": [[{ "node": "Bổ sung WAN hiện tại", "type": "main", "index": 0 }]] },
+    "Bổ sung WAN hiện tại": { "main": [[
+      { "node": "Cần xử lý email?", "type": "main", "index": 0 },
+      { "node": "Cần đồng bộ GLPI?", "type": "main", "index": 0 }
+    ]] },
+    "Cần xử lý email?": { "main": [[{ "node": "Đã cấu hình SMTP thật?", "type": "main", "index": 0 }], []] },
+    "Đã cấu hình SMTP thật?": { "main": [
+      [{ "node": "Gửi email qua SMTP", "type": "main", "index": 0 }],
+      [{ "node": "Ghi email vào nhật ký thử nghiệm", "type": "main", "index": 0 }]
+    ] },
+    "Gửi email qua SMTP": { "main": [[{ "node": "Ghi nhận email đã gửi", "type": "main", "index": 0 }]] },
+    "Cần đồng bộ GLPI?": { "main": [[{ "node": "Mở phiên GLPI", "type": "main", "index": 0 }], []] },
+    "Mở phiên GLPI": { "main": [[{ "node": "Tạo phiếu mới?", "type": "main", "index": 0 }]] },
+    "Tạo phiếu mới?": { "main": [
+      [{ "node": "Tạo phiếu GLPI", "type": "main", "index": 0 }],
+      [{ "node": "Thêm ghi chú vào phiếu cũ", "type": "main", "index": 0 }]
+    ] },
+    "Tạo phiếu GLPI": { "main": [[{ "node": "Lưu mã phiếu GLPI", "type": "main", "index": 0 }]] },
+    "Lưu mã phiếu GLPI": { "main": [[{ "node": "Kết thúc phiên GLPI", "type": "main", "index": 0 }]] },
+    "Thêm ghi chú vào phiếu cũ": { "main": [[{ "node": "Cập nhật hoặc đóng phiếu GLPI", "type": "main", "index": 0 }]] },
+    "Cập nhật hoặc đóng phiếu GLPI": { "main": [[{ "node": "Ghi nhận phiếu đã cập nhật", "type": "main", "index": 0 }]] },
+    "Ghi nhận phiếu đã cập nhật": { "main": [[{ "node": "Kết thúc phiên GLPI", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "7dcf05da-26b8-4fe5-9eb4-1339be605f21",
+  "meta": { "templateCredsSetupCompleted": true },
+  "id": "bpoNotifyTicket01",
+  "tags": []
+}
