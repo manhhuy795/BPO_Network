@@ -63,7 +63,7 @@ Khi một thành phần lỗi:
 | Open vSwitch | Ubuntu VM | Chuyển mạch VLAN trong topology. |
 | `topology_v2_dual_wan.py` | Ubuntu VM | Tạo mạng VLAN, FPT/Viettel, CRM/CFONO và Mininet CLI. |
 | `wan_monitor.py` | Namespace router `r1` | Ping hai WAN, đo latency/loss, failover và failback. |
-| `bpo_exporter.py` | Ubuntu VM | Chuyển trạng thái runtime thành metric Prometheus trên cổng 9105. |
+| `bpo_exporter.py` | Ubuntu VM | Chuyển trạng thái runtime thành metric Prometheus, đồng thời phát hiện file WAN lỗi hoặc stale trên cổng 9105. |
 | Prometheus | Windows Docker | Thu thập metric, lưu chuỗi thời gian và đánh giá luật cảnh báo. |
 | Blackbox Exporter | Windows Docker | Kiểm tra HTTP endpoint mà Windows thực sự truy cập được. |
 | Alertmanager | Windows Docker | Gom nhóm thông báo và gửi webhook `firing/resolved` tới n8n. |
@@ -250,7 +250,7 @@ curl http://127.0.0.1:9105/health
 curl http://127.0.0.1:9105/metrics
 ```
 
-Mục đích: exporter đọc `runtime/wan_status.json` và PID CRM/CFONO, sau đó cung cấp metric cho Prometheus trên Windows.
+Mục đích: exporter đọc `runtime/wan_status.json` và PID CRM/CFONO, kiểm tra độ mới của trạng thái WAN, sau đó cung cấp metric cho Prometheus trên Windows.
 
 ### Bước 3 – Khởi động topology Dual-WAN trên Ubuntu
 
@@ -340,6 +340,10 @@ Mở http://localhost:9090/query và chạy lần lượt:
 
 ```promql
 bpo_exporter_up
+bpo_wan_status_read_success
+bpo_wan_status_age_seconds
+bpo_wan_status_last_update_timestamp_seconds
+bpo_wan_monitor_up
 bpo_link_up
 bpo_active_link
 bpo_service_up
@@ -347,6 +351,18 @@ bpo_latency_ms
 bpo_packet_loss_percent
 ALERTS
 ```
+
+Các metric kiểm tra độ tin cậy của dữ liệu WAN:
+
+| Metric | Ý nghĩa |
+|---|---|
+| `bpo_exporter_up` | HTTP exporter còn hoạt động; không khẳng định dữ liệu WAN còn mới. |
+| `bpo_wan_status_read_success` | Bằng `1` khi đọc và parse được `wan_status.json`; bằng `0` khi file mất, không đọc được hoặc JSON lỗi. |
+| `bpo_wan_status_age_seconds` | Số giây từ `checked_at` gần nhất; không xuất khi timestamp thiếu hoặc không hợp lệ. |
+| `bpo_wan_status_last_update_timestamp_seconds` | Giá trị `checked_at` được đổi sang Unix timestamp; không xuất khi timestamp thiếu hoặc không hợp lệ. |
+| `bpo_wan_monitor_up` | Bằng `1` khi file đọc được, timestamp không ở tương lai và tuổi dữ liệu không quá 10 giây. |
+
+`wan_monitor.py` chạy mỗi 2 giây. Ngưỡng stale là 10 giây, tương đương bỏ lỡ 5 chu kỳ liên tiếp. `WANMonitorDown` dùng cho lỗi đọc/JSON; `WANStatusStale` dùng cho JSON đọc được nhưng timestamp thiếu, ở tương lai hoặc quá cũ. Hai alert được thiết kế không firing trùng nhau.
 
 Mở http://localhost:9090/targets để kiểm tra target `bpo_exporter` có trạng thái `UP`.
 
@@ -503,6 +519,7 @@ powershell -ExecutionPolicy Bypass -File tests/test_phase_k.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_phase_l.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_phase_m.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_phase_n.ps1
+powershell -ExecutionPolicy Bypass -File tests/test_wan_status_stale.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_full_integration.ps1
 ```
 
@@ -644,6 +661,17 @@ ss -lntp | grep 9105
 
 ```powershell
 docker compose --env-file .env -f docker/docker-compose.yml up -d --force-recreate prometheus blackbox
+```
+
+### `WANMonitorDown` hoặc `WANStatusStale`
+
+- `WANMonitorDown`: kiểm tra file `runtime/wan_status.json`, quyền đọc và cú pháp JSON.
+- `WANStatusStale`: kiểm tra tiến trình `wan_monitor.py`, trường `checked_at` và đồng hồ Ubuntu.
+
+```bash
+pgrep -af '[w]an_monitor.py'
+cat runtime/wan_status.json
+curl -s http://127.0.0.1:9105/metrics | grep '^bpo_wan_'
 ```
 
 ### CRM/CFONO hiển thị DOWN

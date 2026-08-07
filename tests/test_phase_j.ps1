@@ -119,10 +119,10 @@ try {
 }
 
 try {
-    Kiem-Tra "Prometheus tải đủ 7 luật cảnh báo BPO" {
+    Kiem-Tra "Prometheus tải đủ 9 luật cảnh báo BPO" {
         $DuLieu = Invoke-RestMethod -Uri "http://localhost:9090/api/v1/rules" -TimeoutSec 5
         $Ten = @($DuLieu.data.groups.rules | ForEach-Object { $_.name })
-        @("BPOExporterDown", "FPTDownViettelAvailable", "BothWANDown", "CRMDown", "CFONODown", "HighPacketLoss", "HighLatency" |
+        @("BPOExporterDown", "WANMonitorDown", "WANStatusStale", "FPTDownViettelAvailable", "BothWANDown", "CRMDown", "CFONODown", "HighPacketLoss", "HighLatency" |
             Where-Object { $_ -notin $Ten }).Count -eq 0
     }
 

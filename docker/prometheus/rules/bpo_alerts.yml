@@ -13,10 +13,38 @@ groups:
           description: "Prometheus không thể lấy số liệu từ exporter trên Ubuntu VM."
           suspected_cause: "Exporter dừng, cổng 9105 bị chặn hoặc Ubuntu VM mất kết nối."
 
+      - alert: WANMonitorDown
+        expr: |
+          (bpo_wan_status_read_success == 0)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 5s
+        labels:
+          severity: cao
+          category: monitoring
+        annotations:
+          summary: "Không đọc được trạng thái giám sát WAN"
+          description: "Exporter còn hoạt động nhưng không thể đọc hoặc phân tích runtime/wan_status.json."
+          suspected_cause: "File trạng thái bị mất, không có quyền đọc hoặc chứa JSON sai định dạng."
+
+      - alert: WANStatusStale
+        expr: |
+          (bpo_wan_status_read_success == 1)
+          and on(instance, job) (bpo_wan_monitor_up == 0)
+          and on(instance, job) (up{job="bpo_exporter"} == 1)
+        for: 5s
+        labels:
+          severity: cao
+          category: monitoring
+        annotations:
+          summary: "Trạng thái giám sát WAN không còn mới"
+          description: "Exporter đọc được JSON nhưng timestamp thiếu, ở tương lai hoặc đã quá ngưỡng 10 giây."
+          suspected_cause: "wan_monitor.py đã dừng, bị treo hoặc đồng hồ hệ thống không chính xác."
+
       - alert: FPTDownViettelAvailable
         expr: |
           (bpo_link_up{provider="fpt"} == 0)
           and on(instance, job) (bpo_link_up{provider="viettel"} == 1)
+          and on(instance, job) (bpo_wan_monitor_up == 1)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 10s
         labels:
@@ -31,6 +59,7 @@ groups:
         expr: |
           (bpo_link_up{provider="fpt"} == 0)
           and on(instance, job) (bpo_link_up{provider="viettel"} == 0)
+          and on(instance, job) (bpo_wan_monitor_up == 1)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 10s
         labels:
@@ -71,6 +100,7 @@ groups:
         expr: |
           (bpo_packet_loss_percent > 20)
           and on(instance, job, provider) (bpo_link_up == 1)
+          and on(instance, job) (bpo_wan_monitor_up == 1)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 15s
         labels:
@@ -85,6 +115,7 @@ groups:
         expr: |
           (bpo_latency_ms > 100)
           and on(instance, job, provider) (bpo_link_up == 1)
+          and on(instance, job) (bpo_wan_monitor_up == 1)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 30s
         labels:

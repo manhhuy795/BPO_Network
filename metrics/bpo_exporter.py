@@ -6,6 +6,8 @@
 import json
 import math
 import os
+import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -14,6 +16,8 @@ DIA_CHI = "0.0.0.0"
 CONG = 9105
 FILE_TRANG_THAI = Path(__file__).resolve().parent.parent / "runtime/wan_status.json"
 FILE_PID_DICH_VU = {"crm": Path("/tmp/bpo_crm.pid"), "cfono": Path("/tmp/bpo_cfono.pid")}
+# wan_monitor chạy mỗi 2 giây; thiếu 5 chu kỳ liên tiếp thì trạng thái đã stale.
+NGUONG_STALE_GIAY = 10
 
 
 def la_so(gia_tri):
@@ -44,6 +48,19 @@ def dich_vu_dang_chay(file_pid):
         return False
 
 
+def lay_timestamp_cap_nhat(trang_thai):
+    """Đổi checked_at ISO 8601 hiện có thành Unix timestamp."""
+    if not isinstance(trang_thai, dict) or not isinstance(trang_thai.get("checked_at"), str):
+        return None
+    try:
+        thoi_diem = datetime.fromisoformat(trang_thai["checked_at"])
+        if thoi_diem.tzinfo is None:
+            return None
+        return thoi_diem.timestamp()
+    except ValueError:
+        return None
+
+
 def tao_metrics():
     """Chỉ xuất metric có dữ liệu thật trong file trạng thái."""
     cac_dong = [dong_metric("bpo_exporter_up", 1)]
@@ -51,7 +68,31 @@ def tao_metrics():
         trang_thai = json.loads(FILE_TRANG_THAI.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as loi:
         print(f"[CẢNH BÁO] Không đọc được trạng thái WAN: {loi}", flush=True)
+        cac_dong.extend([
+            dong_metric("bpo_wan_status_read_success", 0),
+            dong_metric("bpo_wan_monitor_up", 0),
+        ])
         return "\n".join(cac_dong) + "\n"
+
+    cac_dong.append(dong_metric("bpo_wan_status_read_success", 1))
+    timestamp_cap_nhat = lay_timestamp_cap_nhat(trang_thai)
+    if timestamp_cap_nhat is None:
+        cac_dong.append(dong_metric("bpo_wan_monitor_up", 0))
+    else:
+        tuoi_thuc = time.time() - timestamp_cap_nhat
+        cac_dong.extend([
+            dong_metric("bpo_wan_status_age_seconds", round(max(0, tuoi_thuc), 3)),
+            dong_metric(
+                "bpo_wan_status_last_update_timestamp_seconds", timestamp_cap_nhat
+            ),
+            dong_metric(
+                "bpo_wan_monitor_up",
+                int(0 <= tuoi_thuc <= NGUONG_STALE_GIAY),
+            ),
+        ])
+
+    if not isinstance(trang_thai, dict):
+        trang_thai = {}
 
     for nha_mang in ("fpt", "viettel"):
         trang_thai_link = trang_thai.get(f"{nha_mang}_up")

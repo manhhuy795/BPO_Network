@@ -1,0 +1,91 @@
+rule_files:
+  - ../../docker/prometheus/rules/bpo_alerts.yml
+
+evaluation_interval: 5s
+
+tests:
+  - name: File trạng thái lỗi chỉ tạo WANMonitorDown
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_wan_status_read_success{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x6'
+      - series: 'bpo_wan_monitor_up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: WANMonitorDown
+        exp_alerts:
+          - exp_labels:
+              alertname: WANMonitorDown
+              category: monitoring
+              instance: ubuntu-vm:9105
+              job: bpo_exporter
+              severity: cao
+            exp_annotations:
+              summary: Không đọc được trạng thái giám sát WAN
+              description: Exporter còn hoạt động nhưng không thể đọc hoặc phân tích runtime/wan_status.json.
+              suspected_cause: File trạng thái bị mất, không có quyền đọc hoặc chứa JSON sai định dạng.
+      - eval_time: 15s
+        alertname: WANStatusStale
+        exp_alerts: []
+
+  - name: File đọc được nhưng cũ chỉ tạo WANStatusStale
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_wan_status_read_success{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_wan_monitor_up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: WANMonitorDown
+        exp_alerts: []
+      - eval_time: 15s
+        alertname: WANStatusStale
+        exp_alerts:
+          - exp_labels:
+              alertname: WANStatusStale
+              category: monitoring
+              instance: ubuntu-vm:9105
+              job: bpo_exporter
+              severity: cao
+            exp_annotations:
+              summary: Trạng thái giám sát WAN không còn mới
+              description: Exporter đọc được JSON nhưng timestamp thiếu, ở tương lai hoặc đã quá ngưỡng 10 giây.
+              suspected_cause: wan_monitor.py đã dừng, bị treo hoặc đồng hồ hệ thống không chính xác.
+
+  - name: Dữ liệu cũ không tạo cảnh báo WAN từ giá trị cũ
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_wan_status_read_success{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_wan_monitor_up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x12'
+      - series: 'bpo_link_up{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x12'
+      - series: 'bpo_link_up{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_latency_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '200x12'
+      - series: 'bpo_packet_loss_percent{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '50x12'
+      - series: 'bpo_latency_ms{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '200x12'
+      - series: 'bpo_packet_loss_percent{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '50x12'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: FPTDownViettelAvailable
+        exp_alerts: []
+      - eval_time: 45s
+        alertname: HighLatency
+        exp_alerts: []
+      - eval_time: 45s
+        alertname: HighPacketLoss
+        exp_alerts: []
