@@ -50,6 +50,17 @@ $GrafanaHeader = @{ Authorization = "Basic $Basic" }
 
 function LucNay { return [DateTime]::UtcNow.ToString("o") }
 
+function TinhKhoangGiay($BatDau, $KetThuc) {
+    if (-not $BatDau -or -not $KetThuc) { return "N/A" }
+    try {
+        $SoGiay = ([DateTimeOffset]::Parse([string]$KetThuc) - [DateTimeOffset]::Parse([string]$BatDau)).TotalSeconds
+        if ($SoGiay -lt 0) { return "N/A" }
+        return [Math]::Round($SoGiay, 3)
+    } catch {
+        return "N/A"
+    }
+}
+
 function Sql([string]$CauLenh) {
     $env:PGPASSWORD = $PgPassword
     $KetQua = & docker exec --env PGPASSWORD bpo-postgres psql `
@@ -214,9 +225,26 @@ function TaoDongDo([string]$Ma, [string]$Ten) {
         thoi_gian_tao_incident = ""
         thoi_gian_tao_phieu = ""
         thoi_gian_phuc_hoi = ""
+        raw_alert_received_at = ""
+        incident_resolved_at = ""
+        time_to_detect_seconds = "N/A"
+        time_to_incident_seconds = "N/A"
+        time_to_ticket_seconds = "N/A"
+        time_to_correlate_seconds = "N/A"
+        time_to_resolve_seconds = "N/A"
         so_canh_bao_goc = 0
         so_incident = 0
         so_phieu_glpi = 0
+        so_alert_accepted = 0
+        so_alert_duplicate = 0
+        so_incident_created = 0
+        so_incident_updated = 0
+        so_ticket_created = 0
+        so_ticket_updated = 0
+        so_ticket_reused = 0
+        so_ticket_failed = 0
+        so_incident_trung_tranh = 0
+        so_ticket_trung_tranh = 0
         ket_qua = "KHÔNG ĐẠT"
         ghi_chu = ""
     }
@@ -225,9 +253,19 @@ function TaoDongDo([string]$Ma, [string]$Ten) {
 function DienMocDatabase($Dong, [string]$MocSql) {
     $SqlMoc = @"
 SELECT
-  COALESCE(min(e.created_at)::text,''),
-  COALESCE(min(CASE WHEN n.glpi_status NOT IN ('pending','failed','skipped') THEN n.updated_at END)::text,''),
-  count(DISTINCT r.id), count(DISTINCT ia.incident_id), count(DISTINCT x.glpi_ticket_id)
+  COALESCE((min(r.received_at) FILTER (WHERE r.status='firing'))::text,''),
+  COALESCE((min(e.created_at) FILTER (WHERE e.event_type IN ('opened','reopened','updated')))::text,''),
+  COALESCE((min(n.glpi_completed_at) FILTER (WHERE n.glpi_status IN ('created','updated')))::text,''),
+  COALESCE((max(e.created_at) FILTER (WHERE e.event_type='alert_resolved'))::text,''),
+  count(DISTINCT r.id),
+  count(DISTINCT ia.incident_id),
+  count(DISTINCT x.glpi_ticket_id),
+  count(DISTINCT e.id) FILTER (WHERE e.event_type='opened'),
+  count(DISTINCT e.id) FILTER (WHERE e.event_type IN ('reopened','updated')),
+  count(DISTINCT n.id) FILTER (WHERE n.glpi_status='created'),
+  count(DISTINCT n.id) FILTER (WHERE n.glpi_status='updated'),
+  count(DISTINCT n.id) FILTER (WHERE n.glpi_status='updated'),
+  count(DISTINCT n.id) FILTER (WHERE n.glpi_status='failed')
 FROM raw_alerts r
 LEFT JOIN incident_alerts ia ON ia.alert_id=r.id
 LEFT JOIN incident_events e ON e.event_data->>'raw_alert_id'=r.id::text
@@ -236,12 +274,26 @@ LEFT JOIN incident_integrations x ON x.incident_id=ia.incident_id
 WHERE r.received_at >= '$MocSql'::timestamptz;
 "@
     $Cot = (Sql $SqlMoc) -split '\|'
-    if ($Cot.Count -ge 5) {
-        if (-not $Dong.thoi_gian_tao_incident) { $Dong.thoi_gian_tao_incident = $Cot[0] }
-        if (-not $Dong.thoi_gian_tao_phieu) { $Dong.thoi_gian_tao_phieu = $Cot[1] }
-        $Dong.so_canh_bao_goc = [int]$Cot[2]
-        $Dong.so_incident = [int]$Cot[3]
-        $Dong.so_phieu_glpi = [int]$Cot[4]
+    if ($Cot.Count -ge 13) {
+        $Dong.raw_alert_received_at = $Cot[0]
+        if (-not $Dong.thoi_gian_tao_incident) { $Dong.thoi_gian_tao_incident = $Cot[1] }
+        if (-not $Dong.thoi_gian_tao_phieu) { $Dong.thoi_gian_tao_phieu = $Cot[2] }
+        $Dong.incident_resolved_at = $Cot[3]
+        $Dong.so_canh_bao_goc = [int]$Cot[4]
+        $Dong.so_incident = [int]$Cot[5]
+        $Dong.so_phieu_glpi = [int]$Cot[6]
+        $Dong.so_alert_accepted = [int]$Cot[4]
+        $Dong.so_incident_created = [int]$Cot[7]
+        $Dong.so_incident_updated = [int]$Cot[8]
+        $Dong.so_ticket_created = [int]$Cot[9]
+        $Dong.so_ticket_updated = [int]$Cot[10]
+        $Dong.so_ticket_reused = [int]$Cot[11]
+        $Dong.so_ticket_failed = [int]$Cot[12]
+        $Dong.time_to_detect_seconds = TinhKhoangGiay $Dong.thoi_gian_bat_dau $Dong.thoi_gian_phat_hien
+        $Dong.time_to_incident_seconds = TinhKhoangGiay $Dong.thoi_gian_bat_dau $Dong.thoi_gian_tao_incident
+        $Dong.time_to_ticket_seconds = TinhKhoangGiay $Dong.thoi_gian_bat_dau $Dong.thoi_gian_tao_phieu
+        $Dong.time_to_correlate_seconds = TinhKhoangGiay $Dong.raw_alert_received_at $Dong.thoi_gian_tao_incident
+        $Dong.time_to_resolve_seconds = TinhKhoangGiay $Dong.thoi_gian_bat_dau $Dong.incident_resolved_at
     }
 }
 
@@ -253,7 +305,7 @@ function ChayTinhHuong([string]$Ma, [string]$Ten, [scriptblock]$NoiDung) {
     if ($Only.Count -and $Ma -notin $Only) { return }
     $script:DaChay++
     $Dong = TaoDongDo $Ma $Ten
-    $NguCanh = [ordered]@{ MocSql = "" }
+    $NguCanh = [ordered]@{ MocSql = ""; BoQuaMocDatabase = $false }
     $Dat = $false
     try {
         PhucHoiNen
@@ -271,12 +323,29 @@ function ChayTinhHuong([string]$Ma, [string]$Ten, [scriptblock]$NoiDung) {
             $Dat = $false
             $Dong.ghi_chu = (($Dong.ghi_chu + "; lỗi phục hồi: " + $_.Exception.Message).Trim(';', ' '))
         }
-        if ($NguCanh.MocSql) {
+        if ($NguCanh.MocSql -and -not $NguCanh.BoQuaMocDatabase) {
             try { DienMocDatabase $Dong $NguCanh.MocSql } catch {
                 $Dat = $false
                 $Dong.ghi_chu = (($Dong.ghi_chu + "; lỗi đo DB: " + $_.Exception.Message).Trim(';', ' '))
             }
         }
+    }
+    if ($Dat -and $Ma -eq "O-01" -and (
+        $null -eq $Dong.time_to_incident_seconds -or $Dong.time_to_incident_seconds -eq "N/A" -or
+        $null -eq $Dong.time_to_ticket_seconds -or $Dong.time_to_ticket_seconds -eq "N/A"
+    )) {
+        $Dat = $false
+        $Dong.ghi_chu = "Time to Incident hoặc Time to Ticket chưa được tính từ timestamp thật."
+    }
+    if ($Dat -and $Ma -eq "O-07" -and (
+        $Dong.so_alert_duplicate -ne 2 -or
+        $Dong.so_incident_trung_tranh -ne 2 -or
+        $Dong.so_ticket_trung_tranh -ne 2 -or
+        $Dong.time_to_incident_seconds -ne "N/A" -or
+        $Dong.time_to_ticket_seconds -ne "N/A"
+    )) {
+        $Dat = $false
+        $Dong.ghi_chu = "Số duplicate chưa lấy từ response/DB thật hoặc timestamp thiếu chưa trả N/A."
     }
     if ($Dat) {
         $Dong.ket_qua = "ĐẠT"
@@ -561,24 +630,34 @@ ChayTinhHuong "O-06" "Exporter Ubuntu dừng" {
 
 ChayTinhHuong "O-07" "Cảnh báo trùng" {
     param($Dong, $Ctx)
+    # O-07 không tạo raw alert mới; số liệu lấy từ response và chênh lệch DB riêng bên dưới.
+    $Ctx.BoQuaMocDatabase = $true
     $PayloadJson = Sql "SELECT jsonb_build_object('receiver','n8n_bpo','status',payload->>'status','alerts',jsonb_build_array(payload->'alert'))::text FROM raw_alerts WHERE status='firing' AND alert_name IN ('CRMDown','CFONODown') AND fingerprint NOT LIKE 'phase-%' ORDER BY id DESC LIMIT 1;"
     if (-not $PayloadJson) { throw "Không tìm thấy payload cảnh báo thật để phát lại." }
     $RawTruoc = [int](Sql "SELECT count(*) FROM raw_alerts;")
+    $IncidentTruoc = [int](Sql "SELECT count(*) FROM incidents;")
     $AlertCountTruoc = [int](Sql "SELECT COALESCE(sum(alert_count),0) FROM incidents;")
     $ThongBaoTruoc = [int](Sql "SELECT count(*) FROM notification_events;")
     $PhieuTruoc = [int](Sql "SELECT count(*) FROM incident_integrations;")
     $TraVe1 = Invoke-RestMethod $Webhook -Method Post -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
     $TraVe2 = Invoke-RestMethod $Webhook -Method Post -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
     Start-Sleep -Seconds 5
-    if ($TraVe1.status -ne "duplicate" -or $TraVe2.status -ne "duplicate") { throw "n8n không trả trạng thái duplicate." }
-    if ([int](Sql "SELECT count(*) FROM raw_alerts;") -ne $RawTruoc -or
-        [int](Sql "SELECT COALESCE(sum(alert_count),0) FROM incidents;") -ne $AlertCountTruoc -or
-        [int](Sql "SELECT count(*) FROM notification_events;") -ne $ThongBaoTruoc -or
-        [int](Sql "SELECT count(*) FROM incident_integrations;") -ne $PhieuTruoc) {
+    $SoDuplicate = @($TraVe1, $TraVe2 | Where-Object { $_.status -eq "duplicate" }).Count
+    $RawSau = [int](Sql "SELECT count(*) FROM raw_alerts;")
+    $IncidentSau = [int](Sql "SELECT count(*) FROM incidents;")
+    $AlertCountSau = [int](Sql "SELECT COALESCE(sum(alert_count),0) FROM incidents;")
+    $ThongBaoSau = [int](Sql "SELECT count(*) FROM notification_events;")
+    $PhieuSau = [int](Sql "SELECT count(*) FROM incident_integrations;")
+    if ($SoDuplicate -ne 2) { throw "n8n không trả đủ hai trạng thái duplicate." }
+    if ($RawSau -ne $RawTruoc -or $IncidentSau -ne $IncidentTruoc -or $AlertCountSau -ne $AlertCountTruoc -or
+        $ThongBaoSau -ne $ThongBaoTruoc -or $PhieuSau -ne $PhieuTruoc) {
         throw "Payload trùng làm thay đổi raw alert, alert_count, email hoặc phiếu."
     }
     $Dong.thoi_gian_phat_hien = LucNay
-    $Dong.ghi_chu = "Phát lại hai lần payload Alertmanager thật; tránh 2 raw alert, 2 email và 2 phiếu trùng."
+    $Dong.so_alert_duplicate = $SoDuplicate
+    $Dong.so_incident_trung_tranh = $SoDuplicate
+    $Dong.so_ticket_trung_tranh = $SoDuplicate
+    $Dong.ghi_chu = "Response duplicate=$SoDuplicate; chênh lệch DB raw=$($RawSau-$RawTruoc), incident=$($IncidentSau-$IncidentTruoc), alert_count=$($AlertCountSau-$AlertCountTruoc), notification=$($ThongBaoSau-$ThongBaoTruoc), ticket=$($PhieuSau-$PhieuTruoc)."
 }
 
 ChayTinhHuong "O-08" "Chất lượng đường truyền FPT suy giảm" {
@@ -666,24 +745,17 @@ try {
     $Incident = [int]$CotTong[1]
     $Phieu = [int]$CotTong[2]
     $DaGom = [Math]::Max(0, $CanhBaoBan - $Incident)
-    $TranhPhieu = [Math]::Max(0, $CanhBaoBan - $Phieu) + 2
-    $ThoiGianPhatHien = @()
-    $ThoiGianIncident = @()
-    foreach ($Dong in $CacDo) {
-        try {
-            if ($Dong.thoi_gian_phat_hien) {
-                $ThoiGianPhatHien += ([DateTimeOffset]::Parse($Dong.thoi_gian_phat_hien) - [DateTimeOffset]::Parse($Dong.thoi_gian_bat_dau)).TotalSeconds
-            }
-            if ($Dong.thoi_gian_tao_incident) {
-                $ThoiGianIncident += ([DateTimeOffset]::Parse($Dong.thoi_gian_tao_incident) - [DateTimeOffset]::Parse($Dong.thoi_gian_bat_dau)).TotalSeconds
-            }
-        } catch {}
-    }
+    $IncidentTrungTranh = [int](($CacDo.so_incident_trung_tranh | Measure-Object -Sum).Sum)
+    $TicketTrungTranh = [int](($CacDo.so_ticket_trung_tranh | Measure-Object -Sum).Sum)
+    $ThoiGianPhatHien = @($CacDo.time_to_detect_seconds | Where-Object { $_ -ne "N/A" } | ForEach-Object { [double]$_ })
+    $ThoiGianIncident = @($CacDo.time_to_incident_seconds | Where-Object { $_ -ne "N/A" } | ForEach-Object { [double]$_ })
+    $ThoiGianTicket = @($CacDo.time_to_ticket_seconds | Where-Object { $_ -ne "N/A" } | ForEach-Object { [double]$_ })
     $TbPhatHien = if ($ThoiGianPhatHien.Count) { [Math]::Round(($ThoiGianPhatHien | Measure-Object -Average).Average, 3) } else { "không có" }
     $TbIncident = if ($ThoiGianIncident.Count) { [Math]::Round(($ThoiGianIncident | Measure-Object -Average).Average, 3) } else { "không có" }
+    $TbTicket = if ($ThoiGianTicket.Count) { [Math]::Round(($ThoiGianTicket | Measure-Object -Average).Average, 3) } else { "không có" }
     $Wan = (Vm "cat $VmRoot/runtime/wan_status.json") | ConvertFrom-Json
-    Ghi "TỔNG HỢP: phát hiện trung bình ${TbPhatHien}s; tạo/cập nhật incident trung bình ${TbIncident}s."
-    Ghi "TỔNG HỢP: failover $($Wan.failover_duration_seconds)s; failback $($Wan.failback_duration_seconds)s; cảnh báo gom=$DaGom; incident trùng tránh=2; phiếu trùng tránh=$TranhPhieu."
+    Ghi "TỔNG HỢP: phát hiện trung bình ${TbPhatHien}s; incident trung bình ${TbIncident}s; ticket trung bình ${TbTicket}s."
+    Ghi "TỔNG HỢP: internal_failover_decision_time=$($Wan.failover_duration_seconds)s; internal_failback_decision_time=$($Wan.failback_duration_seconds)s; cảnh báo gom=$DaGom; incident trùng tránh=$IncidentTrungTranh; phiếu trùng tránh=$TicketTrungTranh."
 } catch {
     $Loi++
     Ghi "[KHÔNG ĐẠT] Không tổng hợp được số liệu: $($_.Exception.Message)"

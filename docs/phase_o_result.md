@@ -1,6 +1,6 @@
 # Kết quả kiểm thử tích hợp Giai đoạn O
 
-Thời điểm chạy cuối: 03/08/2026. Kết quả: **ĐẠT 9/9 (100%)**; `tests/test_phase_o.ps1` và wrapper `tests/run_full_integration.ps1` đều trả mã thoát `0`.
+Lần chạy đầy đủ gần nhất: 03/08/2026. Kết quả: **ĐẠT 9/9 (100%)**; `tests/test_phase_o.ps1` và wrapper `tests/run_full_integration.ps1` đều trả mã thoát `0`.
 
 ## Trạng thái ban đầu
 
@@ -31,18 +31,22 @@ Một cảnh báo thử nghiệm cũ của Giai đoạn M còn thiếu bản tin
 
 Raw alert trong bảng gồm cả bản tin `firing` và `resolved`.
 
-## Số liệu tổng hợp
+## Công thức và nguồn số liệu sau Phase 5
 
-- Thời gian phát hiện trung bình: **7,712 giây**.
-- Thời gian tạo/cập nhật incident trung bình: **18,502 giây**.
-- Failover: **4,002 giây**.
-- Failback: **8,775 giây**.
-- Cảnh báo được gom: **4**.
-- Lần phát lại tránh incident trùng: **2**.
-- Phiếu GLPI trùng tránh được theo phép tổng hợp: **6**.
-- Tỷ lệ đạt: **9/9, 100%**.
+- `Time to Detect = thoi_gian_phat_hien - thoi_gian_bat_dau`.
+- `Time to Incident = incident_events.created_at - thoi_gian_bat_dau`.
+- `Time to Ticket = notification_events.glpi_completed_at - thoi_gian_bat_dau`; kết quả GLPI `created` hoặc `updated` đều là một hành động ticket hoàn tất.
+- `Time to Correlate = incident_events.created_at - raw_alerts.received_at`.
+- `Time to Resolve = incident_events.created_at(event_type='alert_resolved') - thoi_gian_bat_dau`.
+- `alert duplicate` lấy từ response `duplicate` thực của n8n; số incident/ticket tránh trùng chỉ được ghi khi các bộ đếm PostgreSQL trước và sau không đổi.
+- `alert accepted` là số hàng `raw_alerts` mới; `incident created/updated` lấy từ `incident_events`.
+- `ticket created/updated/failed` lấy từ `notification_events.glpi_status`; `ticket reused` là trường hợp action `updated` dùng lại ticket đã gắn với incident.
 
-Số liệu chi tiết và timestamp gốc nằm trong `logs/phase_o_measurements.csv`; ô không áp dụng được để trống, không điền số giả.
+Timestamp thiếu, sai hoặc tạo khoảng thời gian âm được ghi `N/A`; script không tự điền `0`. CSV lịch sử ngày 03/08 chỉ tính lại các khoảng có đủ timestamp gốc. Các trường trước đây chưa ghi riêng, đặc biệt `glpi_completed_at` và duplicate dạng cấu trúc, giữ `N/A` thay vì suy diễn từ ghi chú.
+
+`runtime/wan_status.json` cung cấp `internal_failover_decision_time`; đây là thời gian quyết định nội bộ của monitor. `logs/wan_measurements.csv` cung cấp `fault_to_route_switch_time_seconds`; đây là thời gian end-to-end từ lúc gây lỗi đến khi route đổi. Hai số đo không được gộp thành một metric.
+
+Kết quả 9/9 ở trên là lần chạy lịch sử. Smoke test Phase 5 ngày 07/08/2026 đạt O-01 và O-07, mã thoát `0`. Dữ liệu mới trong `logs/phase_o_smoke_measurements.csv` ghi O-01 có Time to Incident `26.531` giây, Time to Ticket `26.963` giây và Time to Correlate `0.017` giây. O-07 nhận `2` response duplicate; raw alert, incident, `alert_count`, notification và ticket đều tăng `0`, nên số incident/ticket tránh trùng cùng bằng số response duplicate đo được.
 
 ## Trạng thái incident và GLPI sau kiểm thử
 
