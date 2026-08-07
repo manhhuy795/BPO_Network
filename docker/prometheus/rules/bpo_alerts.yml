@@ -124,6 +124,61 @@ groups:
           description: "Tiến trình CFONO còn sống nhưng HTTP end-to-end từ máy dự án không trả về HTTP 200."
           suspected_cause: "Cổng 80 không phản hồi, HTTP trả mã lỗi hoặc đường mạng tới CFONO bị chặn."
 
+      - alert: AlertmanagerDown
+        expr: probe_success{job="blackbox_http", component="alertmanager"} == 0
+        for: 10s
+        labels:
+          component: alertmanager
+          severity: cao
+          category: pipeline
+        annotations:
+          summary: "Alertmanager không truy cập được"
+          description: "Blackbox không nhận HTTP 200 từ endpoint health của Alertmanager."
+
+      - alert: N8NDown
+        expr: probe_success{job="blackbox_http", component="n8n"} == 0
+        for: 10s
+        labels:
+          component: n8n
+          severity: cao
+          category: pipeline
+        annotations:
+          summary: "n8n không truy cập được"
+          description: "Blackbox không nhận HTTP 200 từ endpoint health của n8n."
+
+      - alert: PostgreSQLDown
+        expr: probe_success{job="blackbox_tcp", component="postgres"} == 0
+        for: 10s
+        labels:
+          component: postgres
+          severity: cao
+          category: pipeline
+        annotations:
+          summary: "PostgreSQL không truy cập được"
+          description: "Blackbox không kết nối TCP được tới PostgreSQL trên cổng 5432."
+
+      - alert: GLPIDown
+        expr: probe_success{job="blackbox_http", component="glpi"} == 0
+        for: 10s
+        labels:
+          component: glpi
+          severity: trung_binh
+          category: pipeline
+        annotations:
+          summary: "GLPI không truy cập được"
+          description: "Blackbox không nhận HTTP 200 từ trang HTTP của GLPI."
+
+      - alert: GrafanaDown
+        expr: probe_success{job="blackbox_http", component="grafana"} == 0
+        for: 10s
+        labels:
+          component: grafana
+          severity: trung_binh
+          category: pipeline
+        annotations:
+          summary: "Grafana không truy cập được"
+          description: "Blackbox không nhận HTTP 200 từ endpoint health của Grafana."
+
       - alert: HighPacketLoss
         expr: |
           (bpo_packet_loss_percent > 20)

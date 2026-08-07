@@ -61,6 +61,48 @@ scrape_configs:
           service: cfono
           environment: bpo_lab
           site: tru_so_345
+      - targets:
+          - http://alertmanager:9093/-/healthy
+        labels:
+          component: alertmanager
+          environment: bpo_lab
+          site: tru_so_345
+      - targets:
+          - http://n8n:5678/healthz
+        labels:
+          component: n8n
+          environment: bpo_lab
+          site: tru_so_345
+      - targets:
+          - http://glpi/
+        labels:
+          component: glpi
+          environment: bpo_lab
+          site: tru_so_345
+      - targets:
+          - http://grafana:3000/api/health
+        labels:
+          component: grafana
+          environment: bpo_lab
+          site: tru_so_345
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: blackbox_tcp
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets: ["postgres:5432"]
+        labels:
+          component: postgres
+          environment: bpo_lab
+          site: tru_so_345
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

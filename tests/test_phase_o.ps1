@@ -1,10 +1,15 @@
-﻿$ErrorActionPreference = "Stop"
+﻿param(
+    [ValidateSet("O-01", "O-02", "O-03", "O-04", "O-05", "O-06", "O-07", "O-08", "O-09")]
+    [string[]]$Only = @()
+)
+
+$ErrorActionPreference = "Stop"
 
 $Goc = Split-Path -Parent $PSScriptRoot
 $Compose = Join-Path $Goc "docker/docker-compose.yml"
 $EnvFile = Join-Path $Goc ".env"
 $LogFile = Join-Path $Goc "logs/phase_o_test.log"
-$CsvFile = Join-Path $Goc "logs/phase_o_measurements.csv"
+$CsvFile = Join-Path $Goc $(if ($Only.Count) { "logs/phase_o_smoke_measurements.csv" } else { "logs/phase_o_measurements.csv" })
 $Webhook = "http://localhost:5678/webhook/bpo-alertmanager"
 $Loi = 0
 $DaChay = 0
@@ -245,6 +250,7 @@ function LuuCsv {
 }
 
 function ChayTinhHuong([string]$Ma, [string]$Ten, [scriptblock]$NoiDung) {
+    if ($Only.Count -and $Ma -notin $Only) { return }
     $script:DaChay++
     $Dong = TaoDongDo $Ma $Ten
     $NguCanh = [ordered]@{ MocSql = "" }
@@ -683,13 +689,14 @@ try {
     Ghi "[KHÔNG ĐẠT] Không tổng hợp được số liệu: $($_.Exception.Message)"
 }
 
+$SoTinhHuong = if ($Only.Count) { $Only.Count } else { 9 }
 $TyLe = if ($DaChay -gt 0) { [Math]::Round((($DaChay - $Loi) * 100.0 / $DaChay), 2) } else { 0 }
 Ghi "TỶ LỆ KIỂM THỬ ĐẠT: $($DaChay - $Loi)/$DaChay ($TyLe%)."
 
-if ($Loi -gt 0 -or $DaChay -ne 9) {
-    Ghi "[KHÔNG ĐẠT] Giai đoạn O: đã chạy $DaChay/9 tình huống, còn $Loi lỗi, mã thoát 1."
+if ($Loi -gt 0 -or $DaChay -ne $SoTinhHuong) {
+    Ghi "[KHÔNG ĐẠT] Giai đoạn O: đã chạy $DaChay/$SoTinhHuong tình huống, còn $Loi lỗi, mã thoát 1."
     exit 1
 }
 
-Ghi "[ĐẠT] Giai đoạn O: 9/9 tình huống đạt, mã thoát 0."
+Ghi "[ĐẠT] Giai đoạn O: $SoTinhHuong/$SoTinhHuong tình huống đạt, mã thoát 0."
 exit 0
