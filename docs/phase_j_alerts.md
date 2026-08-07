@@ -7,11 +7,15 @@ Prometheus đánh giá luật mỗi 5 giây. Các điều kiện WAN và dịch 
 | `BPOExporterDown` | Target `bpo_exporter` DOWN | 10 giây | cao | Exporter dừng, cổng 9105 bị chặn hoặc VM mất kết nối |
 | `FPTDownViettelAvailable` | FPT DOWN và Viettel UP | 10 giây | trung bình | Tuyến hoặc interface FPT lỗi |
 | `BothWANDown` | FPT và Viettel cùng DOWN | 10 giây | cao | Router, kết nối chung hoặc cả hai nhà mạng lỗi |
-| `CRMDown` | CRM DOWN độc lập | 10 giây | trung bình | HTTP server CRM dừng |
-| `CFONODown` | CFONO DOWN độc lập | 10 giây | trung bình | HTTP server CFONO dừng |
+| `CRMProcessDown` | PID CRM không tồn tại | 10 giây | trung bình | Tiến trình HTTP server CRM dừng |
+| `CRMHttpUnavailable` | PID CRM còn sống nhưng HTTP không trả 200 | 10 giây | trung bình | HTTP lỗi hoặc đường mạng tới CRM bị chặn |
+| `CFONOProcessDown` | PID CFONO không tồn tại | 10 giây | trung bình | Tiến trình HTTP server CFONO dừng |
+| `CFONOHttpUnavailable` | PID CFONO còn sống nhưng HTTP không trả 200 | 10 giây | trung bình | HTTP lỗi hoặc đường mạng tới CFONO bị chặn |
 | `HighPacketLoss` | Mất gói `>20%`, link vẫn UP | 15 giây | trung bình | Nghẽn hoặc chất lượng tuyến suy giảm |
 | `HighLatency` | RTT trung bình `bpo_ping_rtt_avg_ms >100 ms`, link vẫn UP | 30 giây | thấp | Nghẽn hoặc định tuyến không tối ưu |
 
 `FPTDownViettelAvailable` và `BothWANDown` loại trừ nhau ngay trong biểu thức: khi Viettel DOWN, cảnh báo FPT đơn lẻ không còn đúng và `BothWANDown` trở thành cảnh báo chính.
+
+Prometheus hiển thị bốn tên cảnh báo dịch vụ mới. Trước khi gửi Alertmanager, chúng được relabel về `CRMDown` hoặc `CFONODown` để giữ nguyên correlation PostgreSQL/n8n hiện có.
 
 Alertmanager hiện chỉ nhận, gom nhóm và hiển thị cảnh báo tại chỗ. Chưa cấu hình webhook n8n hoặc giả lập rằng n8n hoạt động.

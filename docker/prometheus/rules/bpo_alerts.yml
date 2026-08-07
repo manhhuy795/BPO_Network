@@ -70,31 +70,59 @@ groups:
           description: "Hai đường WAN cùng không hoạt động; đây là cảnh báo mất Internet chính."
           suspected_cause: "Router doanh nghiệp, kết nối chung hoặc đồng thời hai tuyến nhà mạng gặp lỗi."
 
-      - alert: CRMDown
+      - alert: CRMProcessDown
         expr: |
-          (bpo_service_up{service="crm"} == 0)
+          (bpo_service_process_up{service="crm"} == 0)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 10s
         labels:
           severity: trung_binh
-          category: service
+          category: service_process
         annotations:
-          summary: "Dịch vụ CRM phía đối tác dừng"
-          description: "Tiến trình CRM không hoạt động trong khi exporter vẫn truy cập được."
-          suspected_cause: "HTTP server CRM dừng hoặc tiến trình CRM gặp lỗi độc lập."
+          summary: "Tiến trình CRM đã dừng"
+          description: "PID do script CRM quản lý không còn tồn tại."
+          suspected_cause: "Tiến trình HTTP server CRM bị dừng hoặc thoát do lỗi."
 
-      - alert: CFONODown
+      - alert: CRMHttpUnavailable
         expr: |
-          (bpo_service_up{service="cfono"} == 0)
+          (probe_success{job="blackbox_http", service="crm"} == 0)
+          and on(instance, job, service) (up{job="blackbox_http"} == 1)
+          and on(service) (bpo_service_process_up{service="crm"} == 1)
+        for: 10s
+        labels:
+          severity: trung_binh
+          category: service_http
+        annotations:
+          summary: "HTTP CRM không truy cập được"
+          description: "Tiến trình CRM còn sống nhưng HTTP end-to-end từ máy dự án không trả về HTTP 200."
+          suspected_cause: "Cổng 80 không phản hồi, HTTP trả mã lỗi hoặc đường mạng tới CRM bị chặn."
+
+      - alert: CFONOProcessDown
+        expr: |
+          (bpo_service_process_up{service="cfono"} == 0)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
         for: 10s
         labels:
           severity: trung_binh
-          category: service
+          category: service_process
         annotations:
-          summary: "Dịch vụ CFONO phía đối tác dừng"
-          description: "Tiến trình CFONO không hoạt động trong khi exporter vẫn truy cập được."
-          suspected_cause: "HTTP server CFONO dừng hoặc tiến trình CFONO gặp lỗi độc lập."
+          summary: "Tiến trình CFONO đã dừng"
+          description: "PID do script CFONO quản lý không còn tồn tại."
+          suspected_cause: "Tiến trình HTTP server CFONO bị dừng hoặc thoát do lỗi."
+
+      - alert: CFONOHttpUnavailable
+        expr: |
+          (probe_success{job="blackbox_http", service="cfono"} == 0)
+          and on(instance, job, service) (up{job="blackbox_http"} == 1)
+          and on(service) (bpo_service_process_up{service="cfono"} == 1)
+        for: 10s
+        labels:
+          severity: trung_binh
+          category: service_http
+        annotations:
+          summary: "HTTP CFONO không truy cập được"
+          description: "Tiến trình CFONO còn sống nhưng HTTP end-to-end từ máy dự án không trả về HTTP 200."
+          suspected_cause: "Cổng 80 không phản hồi, HTTP trả mã lỗi hoặc đường mạng tới CFONO bị chặn."
 
       - alert: HighPacketLoss
         expr: |

@@ -6,6 +6,7 @@
 import json
 import math
 import os
+import subprocess
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +17,10 @@ DIA_CHI = "0.0.0.0"
 CONG = 9105
 FILE_TRANG_THAI = Path(__file__).resolve().parent.parent / "runtime/wan_status.json"
 FILE_PID_DICH_VU = {"crm": Path("/tmp/bpo_crm.pid"), "cfono": Path("/tmp/bpo_cfono.pid")}
+DICH_VU_HTTP = {
+    "crm": ("http://172.16.100.10/", "CRM phía đối tác đang hoạt động"),
+    "cfono": ("http://172.16.100.20/", "CFONO phía đối tác đang hoạt động"),
+}
 # wan_monitor chạy mỗi 2 giây; thiếu 5 chu kỳ liên tiếp thì trạng thái đã stale.
 NGUONG_STALE_GIAY = 10
 
@@ -46,6 +51,45 @@ def dich_vu_dang_chay(file_pid):
         return True
     except (OSError, ValueError):
         return False
+
+
+def tim_pid_node(ten_node):
+    """Tìm PID namespace Mininet dùng làm vị trí kiểm tra của máy dự án."""
+    mau = f"mininet:{ten_node}".encode()
+    for thu_muc in Path("/proc").glob("[0-9]*"):
+        try:
+            if mau in (thu_muc / "cmdline").read_bytes().split(b"\0"):
+                return int(thu_muc.name)
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def probe_http_dich_vu(ten):
+    """Kiểm tra HTTP thật từ pc_du_an_1 qua mạng Mininet."""
+    pid_node = tim_pid_node("pc_du_an_1")
+    if pid_node is None:
+        return 503, "Không tìm thấy máy dự án để kiểm tra HTTP.\n"
+
+    url, noi_dung_mong_doi = DICH_VU_HTTP[ten]
+    try:
+        ket_qua = subprocess.run(
+            [
+                "sudo", "-n", "mnexec", "-a", str(pid_node),
+                "curl", "-fsS", "--max-time", "3", url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=4,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as loi:
+        print(f"[CẢNH BÁO] Không probe được {ten.upper()}: {loi}", flush=True)
+        return 503, f"HTTP {ten.upper()} không truy cập được.\n"
+
+    if ket_qua.returncode != 0 or ket_qua.stdout.strip() != noi_dung_mong_doi:
+        return 503, f"HTTP {ten.upper()} không truy cập được.\n"
+    return 200, noi_dung_mong_doi + "\n"
 
 
 def lay_timestamp_cap_nhat(trang_thai):
@@ -139,7 +183,9 @@ def tao_metrics():
 
     for ten, file_pid in FILE_PID_DICH_VU.items():
         cac_dong.append(dong_metric(
-            "bpo_service_up", int(dich_vu_dang_chay(file_pid)), {"service": ten}
+            "bpo_service_process_up",
+            int(dich_vu_dang_chay(file_pid)),
+            {"service": ten},
         ))
 
     return "\n".join(cac_dong) + "\n"
@@ -151,6 +197,9 @@ class BoXuLy(BaseHTTPRequestHandler):
             self.tra_ve(200, tao_metrics(), "text/plain; version=0.0.4; charset=utf-8")
         elif self.path == "/health":
             self.tra_ve(200, "Bộ xuất số liệu BPO đang hoạt động\n")
+        elif self.path in ("/probe/crm", "/probe/cfono"):
+            ma, noi_dung = probe_http_dich_vu(self.path.rsplit("/", 1)[1])
+            self.tra_ve(ma, noi_dung)
         else:
             self.tra_ve(404, "Không tìm thấy endpoint\n")
 

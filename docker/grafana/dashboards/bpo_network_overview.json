@@ -30,16 +30,22 @@
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
     },
     {
-      "id": 4, "type": "stat", "title": "Dịch vụ CRM", "gridPos": { "h": 4, "w": 3, "x": 12, "y": 0 },
+      "id": 4, "type": "stat", "title": "CRM: process và HTTP", "gridPos": { "h": 4, "w": 3, "x": 12, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
-      "targets": [{ "expr": "bpo_service_up{service=\"crm\"}", "legendFormat": "CRM", "refId": "A" }],
+      "targets": [
+        { "expr": "bpo_service_process_up{service=\"crm\"}", "legendFormat": "Process", "refId": "A" },
+        { "expr": "probe_success{service=\"crm\"}", "legendFormat": "HTTP", "refId": "B" }
+      ],
       "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
     },
     {
-      "id": 5, "type": "stat", "title": "Dịch vụ CFONO", "gridPos": { "h": 4, "w": 3, "x": 15, "y": 0 },
+      "id": 5, "type": "stat", "title": "CFONO: process và HTTP", "gridPos": { "h": 4, "w": 3, "x": 15, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
-      "targets": [{ "expr": "bpo_service_up{service=\"cfono\"}", "legendFormat": "CFONO", "refId": "A" }],
+      "targets": [
+        { "expr": "bpo_service_process_up{service=\"cfono\"}", "legendFormat": "Process", "refId": "A" },
+        { "expr": "probe_success{service=\"cfono\"}", "legendFormat": "HTTP", "refId": "B" }
+      ],
       "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "color": "red", "text": "MẤT" }, "1": { "color": "green", "text": "HOẠT ĐỘNG" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
     },

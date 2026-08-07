@@ -149,14 +149,14 @@ function KhoiDongTopology {
     $DangChay = $false
     try { $DangChay = (Vm "test -f /tmp/bpo_phase_o_topology.pid && kill -0 `$(cat /tmp/bpo_phase_o_topology.pid) 2>/dev/null && echo OK") -eq "OK" } catch {}
     if (-not $DangChay) {
-        $Lenh = "cd $VmRoot && sudo -n mn -c >/tmp/bpo_phase_o_mn_cleanup.log 2>&1 && rm -f /tmp/bpo_phase_o_commands /tmp/bpo_phase_o_topology.pid && : >/tmp/bpo_phase_o_commands && nohup setsid bash -c 'cd $VmRoot && stdbuf -oL tail -n 0 -F /tmp/bpo_phase_o_commands | sudo -n python3 topology/topology_v2_dual_wan.py' >/tmp/bpo_phase_o_topology.log 2>&1 </dev/null & echo `$! >/tmp/bpo_phase_o_topology.pid"
+        $Lenh = "cd $VmRoot; sudo -n mn -c >/tmp/bpo_phase_o_mn_cleanup.log 2>&1 || exit `$?; rm -f /tmp/bpo_phase_o_commands /tmp/bpo_phase_o_topology.pid; : >/tmp/bpo_phase_o_commands; nohup setsid bash -c 'cd $VmRoot && stdbuf -oL tail -n 0 -F /tmp/bpo_phase_o_commands | sudo -n python3 topology/topology_v2_dual_wan.py' >/tmp/bpo_phase_o_topology.log 2>&1 </dev/null & echo `$! >/tmp/bpo_phase_o_topology.pid"
         $null = Vm $Lenh
     }
     if (-not (Cho {
         try {
             $TrangThai = (Invoke-WebRequest -UseBasicParsing "http://${SshIp}:9105/metrics" -TimeoutSec 5).Content
-            return $TrangThai -match 'bpo_service_up\{service="crm"\} 1' -and
-                $TrangThai -match 'bpo_service_up\{service="cfono"\} 1'
+            return $TrangThai -match 'bpo_service_process_up\{service="crm"\} 1' -and
+                $TrangThai -match 'bpo_service_process_up\{service="cfono"\} 1'
         } catch { return $false }
     } 60 2)) { throw "Topology chưa khởi động đủ CRM và CFONO." }
 }
@@ -182,8 +182,10 @@ function PhucHoiNen {
         (GiaTriProm 'bpo_link_up{provider="fpt"}') -eq 1 -and
         (GiaTriProm 'bpo_link_up{provider="viettel"}') -eq 1 -and
         (GiaTriProm 'bpo_active_link{provider="fpt"}') -eq 1 -and
-        (GiaTriProm 'bpo_service_up{service="crm"}') -eq 1 -and
-        (GiaTriProm 'bpo_service_up{service="cfono"}') -eq 1
+        (GiaTriProm 'bpo_service_process_up{service="crm"}') -eq 1 -and
+        (GiaTriProm 'bpo_service_process_up{service="cfono"}') -eq 1 -and
+        (GiaTriProm 'probe_success{service="crm"}') -eq 1 -and
+        (GiaTriProm 'probe_success{service="cfono"}') -eq 1
     } 90 2
     if (-not $SanSang) { throw "Không khôi phục được metric nền." }
 
@@ -472,17 +474,17 @@ ChayTinhHuong "O-03" "FPT phục hồi và failback ổn định" {
     $Dong.ghi_chu = "Failback $($TrangThai.failback_duration_seconds) giây, dùng lại và đóng phiếu GLPI #$TicketMoi."
 }
 
-function ThuDichVuDocLap($Dong, $Ctx, [string]$DichVu, [string]$AlertName, [string]$DichVuConLai, [string]$IncidentKey, [string]$Node) {
+function ThuDichVuDocLap($Dong, $Ctx, [string]$DichVu, [string]$PromAlertName, [string]$AlertName, [string]$DichVuConLai, [string]$IncidentKey, [string]$Node) {
     GuiMininet "$Node bash scripts/stop_$DichVu.sh"
     if (-not (Cho {
-        (GiaTriProm "bpo_service_up{service=`"$DichVu`"}") -eq 0 -and
-        (GiaTriProm "bpo_service_up{service=`"$DichVuConLai`"}") -eq 1 -and
+        (GiaTriProm "bpo_service_process_up{service=`"$DichVu`"}") -eq 0 -and
+        (GiaTriProm "bpo_service_process_up{service=`"$DichVuConLai`"}") -eq 1 -and
         (GiaTriProm 'bpo_link_up{provider="fpt"}') -eq 1 -and
         (GiaTriProm 'bpo_link_up{provider="viettel"}') -eq 1
     } 30 1)) { throw "Metric $DichVu không chuyển xuống độc lập." }
     $Dong.thoi_gian_phat_hien = LucNay
-    if (-not (Cho { (AlertPromDangBan $AlertName) -and (AlertmanagerDangBan $AlertName) } 50 2)) {
-        throw "Không xuất hiện $AlertName."
+    if (-not (Cho { (AlertPromDangBan $PromAlertName) -and (AlertmanagerDangBan $AlertName) } 50 2)) {
+        throw "Không xuất hiện $PromAlertName hoặc cảnh báo tương thích $AlertName."
     }
     $Dong.thoi_gian_tao_canh_bao = LucNay
     if (-not (Cho {
@@ -507,12 +509,12 @@ function ThuDichVuDocLap($Dong, $Ctx, [string]$DichVu, [string]$AlertName, [stri
 
 ChayTinhHuong "O-04" "CRM mất độc lập" {
     param($Dong, $Ctx)
-    ThuDichVuDocLap $Dong $Ctx "crm" "CRMDown" "cfono" "service-crm" "srv_crm"
+    ThuDichVuDocLap $Dong $Ctx "crm" "CRMProcessDown" "CRMDown" "cfono" "service-crm" "srv_crm"
 }
 
 ChayTinhHuong "O-05" "CFONO mất độc lập" {
     param($Dong, $Ctx)
-    ThuDichVuDocLap $Dong $Ctx "cfono" "CFONODown" "crm" "service-cfono" "srv_cfono"
+    ThuDichVuDocLap $Dong $Ctx "cfono" "CFONOProcessDown" "CFONODown" "crm" "service-cfono" "srv_cfono"
 }
 
 ChayTinhHuong "O-06" "Exporter Ubuntu dừng" {

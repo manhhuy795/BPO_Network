@@ -105,6 +105,15 @@ function Cho-Alert([string]$Ten, [bool]$CoAlert) {
     }
 }
 
+function Cho-Alert-Tach([string]$TenPrometheus, [string]$TenAlertmanager, [bool]$CoAlert) {
+    Cho-Den {
+        $CoPrometheus = @(Lay-Alert-Prometheus $TenPrometheus).Count -gt 0
+        $CoAlertmanager = @(Lay-Alert-Alertmanager $TenAlertmanager).Count -gt 0
+        if ($CoAlert) { $CoPrometheus -and $CoAlertmanager }
+        else { -not $CoPrometheus -and -not $CoAlertmanager }
+    }
+}
+
 if (-not (Test-Path $SshKey)) {
     Ghi-KetQua "[KHÔNG ĐẠT] Không tìm thấy khóa SSH: $SshKey"
     exit 2
@@ -119,10 +128,10 @@ try {
 }
 
 try {
-    Kiem-Tra "Prometheus tải đủ 9 luật cảnh báo BPO" {
+    Kiem-Tra "Prometheus tải đủ 11 luật cảnh báo BPO" {
         $DuLieu = Invoke-RestMethod -Uri "http://localhost:9090/api/v1/rules" -TimeoutSec 5
         $Ten = @($DuLieu.data.groups.rules | ForEach-Object { $_.name })
-        @("BPOExporterDown", "WANMonitorDown", "WANStatusStale", "FPTDownViettelAvailable", "BothWANDown", "CRMDown", "CFONODown", "HighPacketLoss", "HighLatency" |
+        @("BPOExporterDown", "WANMonitorDown", "WANStatusStale", "FPTDownViettelAvailable", "BothWANDown", "CRMProcessDown", "CRMHttpUnavailable", "CFONOProcessDown", "CFONOHttpUnavailable", "HighPacketLoss", "HighLatency" |
             Where-Object { $_ -notin $Ten }).Count -eq 0
     }
 
@@ -162,13 +171,14 @@ try {
         $CaHai -and $MucDoDung -and $KhongConCanhBaoFptDon -and $DaPhucHoi
     }
 
-    Kiem-Tra "Dừng CRM chỉ tạo CRMDown, không tạo CFONODown" {
+    Kiem-Tra "Dừng CRM chỉ tạo CRMProcessDown, không tạo cảnh báo CFONO" {
         Chay-Tren-Node "srv_crm" "stop_crm.sh"
-        $CrmCanhBao = Cho-Alert "CRMDown" $true
-        $CfonoKhongCanhBao = Cho-Alert "CFONODown" $false
+        $CrmCanhBao = Cho-Alert-Tach "CRMProcessDown" "CRMDown" $true
+        $CrmHttpKhongCanhBao = @(Lay-Alert-Prometheus "CRMHttpUnavailable").Count -eq 0
+        $CfonoKhongCanhBao = Cho-Alert-Tach "CFONOProcessDown" "CFONODown" $false
         Chay-Tren-Node "srv_crm" "start_crm.sh"
-        $CrmPhucHoi = Cho-Alert "CRMDown" $false
-        $CrmCanhBao -and $CfonoKhongCanhBao -and $CrmPhucHoi
+        $CrmPhucHoi = Cho-Alert-Tach "CRMProcessDown" "CRMDown" $false
+        $CrmCanhBao -and $CrmHttpKhongCanhBao -and $CfonoKhongCanhBao -and $CrmPhucHoi
     }
 
     Kiem-Tra "Khôi phục thành phần làm toàn bộ cảnh báo thử nghiệm được giải quyết" {
@@ -178,8 +188,11 @@ try {
         Chay-Tren-Node "srv_crm" "start_crm.sh"
         Chay-Tren-Node "srv_cfono" "start_cfono.sh"
         Cho-Den {
-            @("BPOExporterDown", "FPTDownViettelAvailable", "BothWANDown", "CRMDown", "CFONODown" |
-                Where-Object { @(Lay-Alert-Prometheus $_).Count -gt 0 -or @(Lay-Alert-Alertmanager $_).Count -gt 0 }).Count -eq 0
+            $ConProm = @("BPOExporterDown", "FPTDownViettelAvailable", "BothWANDown", "CRMProcessDown", "CRMHttpUnavailable", "CFONOProcessDown", "CFONOHttpUnavailable" |
+                Where-Object { @(Lay-Alert-Prometheus $_).Count -gt 0 }).Count -gt 0
+            $ConAlertmanager = @("BPOExporterDown", "FPTDownViettelAvailable", "BothWANDown", "CRMDown", "CFONODown" |
+                Where-Object { @(Lay-Alert-Alertmanager $_).Count -gt 0 }).Count -gt 0
+            -not $ConProm -and -not $ConAlertmanager
         }
     }
 } finally {

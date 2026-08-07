@@ -17,8 +17,8 @@ Tổng quan:
 1. Trạng thái FPT.
 2. Trạng thái Viettel.
 3. Đường WAN đang sử dụng.
-4. Dịch vụ CRM.
-5. Dịch vụ CFONO.
+4. Trạng thái process và HTTP của CRM.
+5. Trạng thái process và HTTP của CFONO.
 6. Ubuntu exporter.
 7. Sự cố đang mở.
 8. Sự cố mức cao đang mở.

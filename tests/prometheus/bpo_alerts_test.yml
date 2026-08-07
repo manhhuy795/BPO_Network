@@ -134,3 +134,157 @@ tests:
               summary: Độ trễ WAN cao
               description: RTT trung bình tuyến fpt vượt 100 ms trong khi link vẫn UP.
               suspected_cause: Tuyến nhà mạng nghẽn, định tuyến vòng hoặc chất lượng kết nối suy giảm.
+
+  - name: Process và HTTP của CRM CFONO đều hoạt động
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_service_process_up{service="crm",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_service_process_up{service="cfono",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'up{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '1x6'
+      - series: 'probe_success{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '1x6'
+      - series: 'up{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '1x6'
+      - series: 'probe_success{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '1x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: CRMProcessDown
+        exp_alerts: []
+      - eval_time: 15s
+        alertname: CRMHttpUnavailable
+        exp_alerts: []
+      - eval_time: 15s
+        alertname: CFONOProcessDown
+        exp_alerts: []
+      - eval_time: 15s
+        alertname: CFONOHttpUnavailable
+        exp_alerts: []
+
+  - name: CRM process dừng chỉ tạo CRMProcessDown
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_service_process_up{service="crm",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x6'
+      - series: 'up{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '1x6'
+      - series: 'probe_success{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: CRMProcessDown
+        exp_alerts:
+          - exp_labels:
+              alertname: CRMProcessDown
+              category: service_process
+              instance: ubuntu-vm:9105
+              job: bpo_exporter
+              service: crm
+              severity: trung_binh
+            exp_annotations:
+              summary: Tiến trình CRM đã dừng
+              description: PID do script CRM quản lý không còn tồn tại.
+              suspected_cause: Tiến trình HTTP server CRM bị dừng hoặc thoát do lỗi.
+      - eval_time: 15s
+        alertname: CRMHttpUnavailable
+        exp_alerts: []
+
+  - name: CFONO process dừng chỉ tạo CFONOProcessDown
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_service_process_up{service="cfono",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '0x6'
+      - series: 'up{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '1x6'
+      - series: 'probe_success{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: CFONOProcessDown
+        exp_alerts:
+          - exp_labels:
+              alertname: CFONOProcessDown
+              category: service_process
+              instance: ubuntu-vm:9105
+              job: bpo_exporter
+              service: cfono
+              severity: trung_binh
+            exp_annotations:
+              summary: Tiến trình CFONO đã dừng
+              description: PID do script CFONO quản lý không còn tồn tại.
+              suspected_cause: Tiến trình HTTP server CFONO bị dừng hoặc thoát do lỗi.
+      - eval_time: 15s
+        alertname: CFONOHttpUnavailable
+        exp_alerts: []
+
+  - name: CRM process sống nhưng HTTP lỗi chỉ tạo CRMHttpUnavailable rồi phục hồi
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x10'
+      - series: 'bpo_service_process_up{service="crm",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x10'
+      - series: 'up{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '1x10'
+      - series: 'probe_success{job="blackbox_http",service="crm",instance="http://ubuntu-vm:9105/probe/crm"}'
+        values: '0x4 1x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: CRMHttpUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: CRMHttpUnavailable
+              category: service_http
+              instance: http://ubuntu-vm:9105/probe/crm
+              job: blackbox_http
+              service: crm
+              severity: trung_binh
+            exp_annotations:
+              summary: HTTP CRM không truy cập được
+              description: Tiến trình CRM còn sống nhưng HTTP end-to-end từ máy dự án không trả về HTTP 200.
+              suspected_cause: Cổng 80 không phản hồi, HTTP trả mã lỗi hoặc đường mạng tới CRM bị chặn.
+      - eval_time: 15s
+        alertname: CRMProcessDown
+        exp_alerts: []
+      - eval_time: 35s
+        alertname: CRMHttpUnavailable
+        exp_alerts: []
+
+  - name: CFONO process sống nhưng HTTP lỗi chỉ tạo CFONOHttpUnavailable
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'bpo_service_process_up{service="cfono",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x6'
+      - series: 'up{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '1x6'
+      - series: 'probe_success{job="blackbox_http",service="cfono",instance="http://ubuntu-vm:9105/probe/cfono"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: CFONOHttpUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: CFONOHttpUnavailable
+              category: service_http
+              instance: http://ubuntu-vm:9105/probe/cfono
+              job: blackbox_http
+              service: cfono
+              severity: trung_binh
+            exp_annotations:
+              summary: HTTP CFONO không truy cập được
+              description: Tiến trình CFONO còn sống nhưng HTTP end-to-end từ máy dự án không trả về HTTP 200.
+              suspected_cause: Cổng 80 không phản hồi, HTTP trả mã lỗi hoặc đường mạng tới CFONO bị chặn.
+      - eval_time: 15s
+        alertname: CFONOProcessDown
+        exp_alerts: []

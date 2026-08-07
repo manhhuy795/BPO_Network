@@ -250,7 +250,7 @@ curl http://127.0.0.1:9105/health
 curl http://127.0.0.1:9105/metrics
 ```
 
-Mục đích: exporter đọc `runtime/wan_status.json` và PID CRM/CFONO, kiểm tra độ mới của trạng thái WAN, sau đó cung cấp metric cho Prometheus trên Windows.
+Mục đích: exporter đọc `runtime/wan_status.json` và PID CRM/CFONO, kiểm tra độ mới của trạng thái WAN, đồng thời chuyển tiếp probe HTTP từ namespace `pc_du_an_1` để Blackbox kiểm tra đúng đường mạng mô phỏng.
 
 ### Bước 3 – Khởi động topology Dual-WAN trên Ubuntu
 
@@ -346,7 +346,9 @@ bpo_wan_status_last_update_timestamp_seconds
 bpo_wan_monitor_up
 bpo_link_up
 bpo_active_link
-bpo_service_up
+bpo_service_process_up
+probe_success{service="crm"}
+probe_success{service="cfono"}
 bpo_ping_rtt_min_ms
 bpo_ping_rtt_avg_ms
 bpo_ping_rtt_max_ms
@@ -364,8 +366,12 @@ Các metric kiểm tra độ tin cậy của dữ liệu WAN:
 | `bpo_wan_status_age_seconds` | Số giây từ `checked_at` gần nhất; không xuất khi timestamp thiếu hoặc không hợp lệ. |
 | `bpo_wan_status_last_update_timestamp_seconds` | Giá trị `checked_at` được đổi sang Unix timestamp; không xuất khi timestamp thiếu hoặc không hợp lệ. |
 | `bpo_wan_monitor_up` | Bằng `1` khi file đọc được, timestamp không ở tương lai và tuổi dữ liệu không quá 10 giây. |
+| `bpo_service_process_up` | Bằng `1` khi PID CRM/CFONO do script quản lý còn tồn tại; chưa khẳng định HTTP truy cập được. |
+| `probe_success{service="crm|cfono"}` | Bằng `1` khi Blackbox nhận HTTP 200 sau phép kiểm tra end-to-end từ `pc_du_an_1` tới đúng dịch vụ. |
 
 `wan_monitor.py` chạy mỗi 2 giây. Ngưỡng stale là 10 giây, tương đương bỏ lỡ 5 chu kỳ liên tiếp. `WANMonitorDown` dùng cho lỗi đọc/JSON; `WANStatusStale` dùng cho JSON đọc được nhưng timestamp thiếu, ở tương lai hoặc quá cũ. Hai alert được thiết kế không firing trùng nhau.
+
+Process health và service availability là hai tín hiệu khác nhau. `CRMProcessDown`/`CFONOProcessDown` báo PID đã mất. `CRMHttpUnavailable`/`CFONOHttpUnavailable` chỉ firing khi PID còn sống nhưng HTTP không trả đúng mã 200. Blackbox chạy trong Docker trên Windows, gọi `/probe/crm` và `/probe/cfono` của exporter Ubuntu; exporter thực hiện `curl` thật từ namespace `pc_du_an_1` tới `172.16.100.10:80` hoặc `172.16.100.20:80`. Khi gửi sang Alertmanager, hai nhóm tên mới được relabel về `CRMDown`/`CFONODown` để giữ tương thích với correlation hiện tại.
 
 Các metric chất lượng WAN được đọc từ dòng thống kê cuối của lệnh ping, đơn vị RTT là milliseconds và mất gói là percent:
 
@@ -535,6 +541,7 @@ powershell -ExecutionPolicy Bypass -File tests/test_phase_l.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_phase_m.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_phase_n.ps1
 powershell -ExecutionPolicy Bypass -File tests/test_wan_status_stale.ps1
+powershell -ExecutionPolicy Bypass -File tests/test_service_http_probe.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_full_integration.ps1
 ```
 
@@ -691,7 +698,12 @@ curl -s http://127.0.0.1:9105/metrics | grep '^bpo_wan_'
 
 ### CRM/CFONO hiển thị DOWN
 
-Hai dịch vụ nằm trong namespace Mininet. Hãy khởi động topology trước khi đánh giá metric dịch vụ.
+Hai dịch vụ nằm trong namespace Mininet. Hãy khởi động topology trước khi đánh giá metric dịch vụ. Kiểm tra riêng process và HTTP:
+
+```promql
+bpo_service_process_up
+probe_success{service=~"crm|cfono"}
+```
 
 ### n8n báo webhook `bpo-alertmanager` chưa đăng ký
 
@@ -734,7 +746,7 @@ Xem báo cáo đầy đủ tại [docs/phase_o_result.md](docs/phase_o_result.md
 
 - Email chỉ được ghi log, chưa gửi SMTP thật.
 - CRM/CFONO là HTTP server Python mô phỏng.
-- Metric dịch vụ chủ yếu phản ánh tiến trình, chưa phải probe end-to-end từ mọi VLAN.
+- Probe HTTP đại diện cho đường truy cập từ `pc_du_an_1`; chưa kiểm tra đồng thời từ mọi VLAN hoặc vị trí người dùng.
 - Dual-WAN là mô phỏng Mininet, không phải hai ISP vật lý.
 - Tương quan n8n dùng quy tắc tĩnh và cửa sổ 120 giây.
 - Hệ thống chưa có HA, backup tự động, TLS, SSO hoặc kiểm thử tải lớn.

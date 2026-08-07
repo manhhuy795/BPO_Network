@@ -95,14 +95,18 @@ Kiem-Tra "Prometheus truy cập được qua cổng 9090" {
     (Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:9090/-/ready" -TimeoutSec 5).StatusCode -eq 200
 }
 
-Kiem-Tra "Target Ubuntu exporter UP và Blackbox probe thành công" {
+Kiem-Tra "Target Ubuntu exporter UP và ba Blackbox probe thành công" {
     Cho-Den {
         $MucTieu = Invoke-RestMethod -Uri "http://localhost:9090/api/v1/targets" -TimeoutSec 5
         $ExporterUp = @($MucTieu.data.activeTargets | Where-Object {
             $_.labels.job -eq "bpo_exporter" -and $_.health -eq "up"
         }).Count -eq 1
-        $Probe = Truy-Van-Prometheus 'probe_success{job="blackbox_http"}'
-        $ExporterUp -and @($Probe.data.result).Count -eq 1 -and $Probe.data.result[0].value[1] -eq "1"
+        $Probe = Truy-Van-Prometheus 'probe_success{job="blackbox_http",service=~".+"}'
+        $KetQuaProbe = @($Probe.data.result)
+        $NhanDichVu = @($KetQuaProbe | ForEach-Object { $_.metric.service } | Sort-Object -Unique)
+        $ExporterUp -and $KetQuaProbe.Count -eq 3 -and
+            @($KetQuaProbe | Where-Object { $_.value[1] -ne "1" }).Count -eq 0 -and
+            @("exporter", "crm", "cfono" | Where-Object { $_ -notin $NhanDichVu }).Count -eq 0
     }
 }
 

@@ -90,10 +90,18 @@ try {
         $PanelRtt = $script:DashboardApi.dashboard.panels | Where-Object { $_.id -eq 13 }
         $BieuThucRtt = @($PanelRtt.targets | ForEach-Object { $_.expr })
         $MetricRtt = @("bpo_ping_rtt_min_ms", "bpo_ping_rtt_avg_ms", "bpo_ping_rtt_max_ms", "bpo_ping_rtt_mdev_ms")
+        $PanelCrm = $script:DashboardApi.dashboard.panels | Where-Object { $_.id -eq 4 }
+        $PanelCfono = $script:DashboardApi.dashboard.panels | Where-Object { $_.id -eq 5 }
+        $MetricCrm = @($PanelCrm.targets | ForEach-Object { $_.expr })
+        $MetricCfono = @($PanelCfono.targets | ForEach-Object { $_.expr })
         $script:DashboardApi.dashboard.uid -eq "bpo-network-overview" -and
             $script:DashboardApi.dashboard.panels.Count -eq 19 -and
             @($MetricRtt | Where-Object { $_ -notin $BieuThucRtt }).Count -eq 0 -and
-            "bpo_latency_ms" -notin $BieuThucRtt
+            "bpo_latency_ms" -notin $BieuThucRtt -and
+            'bpo_service_process_up{service="crm"}' -in $MetricCrm -and
+            'probe_success{service="crm"}' -in $MetricCrm -and
+            'bpo_service_process_up{service="cfono"}' -in $MetricCfono -and
+            'probe_success{service="cfono"}' -in $MetricCfono
     }
     KiemTra "Mọi panel dùng Prometheus hoặc PostgreSQL, không dùng dữ liệu thử cố định" {
         $Json = Get-Content $DashboardFile -Raw -Encoding utf8 | ConvertFrom-Json
@@ -113,8 +121,8 @@ try {
         @( (GrafanaQuery $Q).results.A.frames ).Count -eq 1
     }
     KiemTra "CRM và CFONO có chuỗi số liệu độc lập" {
-        $Q = @(@{ refId = "A"; datasource = @{ uid = "bpo-prometheus"; type = "prometheus" }; expr = "bpo_service_up"; format = "time_series"; intervalMs = 5000; maxDataPoints = 100 })
-        @( (GrafanaQuery $Q).results.A.frames ).Count -ge 2
+        $Q = @(@{ refId = "A"; datasource = @{ uid = "bpo-prometheus"; type = "prometheus" }; expr = 'bpo_service_process_up or probe_success{service=~"crm|cfono"}'; format = "time_series"; intervalMs = 5000; maxDataPoints = 100 })
+        @( (GrafanaQuery $Q).results.A.frames ).Count -ge 4
     }
 
     if (-not (Test-Path $SshKey)) { throw "Không tìm thấy khóa SSH: $SshKey" }

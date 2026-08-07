@@ -101,7 +101,7 @@ for dich_vu in ("crm", "cfono"):
         dang_chay = 1
     except (OSError, ValueError):
         dang_chay = 0
-    mong_doi.add(f'bpo_service_up{{service="{dich_vu}"}} {dang_chay}')
+    mong_doi.add(f'bpo_service_process_up{{service="{dich_vu}"}} {dang_chay}')
 for khoa, ten in (
     ("failover_duration_seconds", "bpo_failover_duration_seconds"),
     ("failback_duration_seconds", "bpo_failback_duration_seconds"),

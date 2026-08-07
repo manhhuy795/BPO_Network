@@ -1,6 +1,7 @@
 import json
 import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -99,3 +100,63 @@ def test_xuat_day_du_thong_ke_rtt_va_mat_goi(tmp_path):
     assert metrics['bpo_ping_rtt_mdev_ms{provider="fpt"}'] == 1.7
     assert metrics['bpo_packet_loss_percent{provider="fpt"}'] == 20.0
     assert 'bpo_ping_rtt_avg_ms{provider="viettel"}' not in metrics
+
+
+def test_metric_pid_duoc_dat_ten_ro_la_process_up(tmp_path, monkeypatch):
+    file_crm = tmp_path / "crm.pid"
+    file_cfono = tmp_path / "cfono.pid"
+    monkeypatch.setattr(
+        bpo_exporter,
+        "FILE_PID_DICH_VU",
+        {"crm": file_crm, "cfono": file_cfono},
+    )
+    monkeypatch.setattr(
+        bpo_exporter,
+        "dich_vu_dang_chay",
+        lambda file_pid: file_pid == file_crm,
+    )
+
+    metrics = doc_metrics(
+        tmp_path / "wan_status.json",
+        trang_thai_voi_timestamp(time.time() - 1),
+    )
+
+    assert metrics['bpo_service_process_up{service="crm"}'] == 1
+    assert metrics['bpo_service_process_up{service="cfono"}'] == 0
+    assert not any(ten.startswith("bpo_service_up{") for ten in metrics)
+
+
+def test_probe_http_tra_ve_200_khi_dich_vu_truy_cap_duoc(monkeypatch):
+    monkeypatch.setattr(bpo_exporter, "tim_pid_node", lambda _ten: 123)
+    monkeypatch.setattr(
+        bpo_exporter.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="CRM phía đối tác đang hoạt động",
+            stderr="",
+        ),
+    )
+
+    ma, noi_dung = bpo_exporter.probe_http_dich_vu("crm")
+
+    assert ma == 200
+    assert noi_dung == "CRM phía đối tác đang hoạt động\n"
+
+
+def test_probe_http_tra_ve_503_khi_http_khong_truy_cap_duoc(monkeypatch):
+    monkeypatch.setattr(bpo_exporter, "tim_pid_node", lambda _ten: 123)
+    monkeypatch.setattr(
+        bpo_exporter.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=22,
+            stdout="",
+            stderr="HTTP 500",
+        ),
+    )
+
+    ma, noi_dung = bpo_exporter.probe_http_dich_vu("crm")
+
+    assert ma == 503
+    assert "không truy cập được" in noi_dung
