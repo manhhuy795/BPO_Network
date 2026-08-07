@@ -10,7 +10,7 @@ Prometheus đánh giá luật mỗi 5 giây. Các điều kiện WAN và dịch 
 | `CRMDown` | CRM DOWN độc lập | 10 giây | trung bình | HTTP server CRM dừng |
 | `CFONODown` | CFONO DOWN độc lập | 10 giây | trung bình | HTTP server CFONO dừng |
 | `HighPacketLoss` | Mất gói `>20%`, link vẫn UP | 15 giây | trung bình | Nghẽn hoặc chất lượng tuyến suy giảm |
-| `HighLatency` | Độ trễ `>100 ms`, link vẫn UP | 30 giây | thấp | Nghẽn hoặc định tuyến không tối ưu |
+| `HighLatency` | RTT trung bình `bpo_ping_rtt_avg_ms >100 ms`, link vẫn UP | 30 giây | thấp | Nghẽn hoặc định tuyến không tối ưu |
 
 `FPTDownViettelAvailable` và `BothWANDown` loại trừ nhau ngay trong biểu thức: khi Viettel DOWN, cảnh báo FPT đơn lẻ không còn đúng và `BothWANDown` trở thành cảnh báo chính.
 

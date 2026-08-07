@@ -84,8 +84,13 @@ mong_doi = set()
 for nha_mang in ("fpt", "viettel"):
     mong_doi.add(f'bpo_link_up{{provider="{nha_mang}"}} {int(trang_thai[f"{nha_mang}_up"])}')
     mong_doi.add(f'bpo_active_link{{provider="{nha_mang}"}} {int(trang_thai["active_wan"] == nha_mang)}')
-    mong_doi.add(f'bpo_latency_ms{{provider="{nha_mang}"}} {trang_thai["latency_ms"][nha_mang]}')
-    mong_doi.add(f'bpo_packet_loss_percent{{provider="{nha_mang}"}} {trang_thai["packet_loss_percent"][nha_mang]}')
+    rtt = trang_thai["ping_rtt_ms"][nha_mang]
+    if isinstance(rtt, dict):
+        for khoa in ("min", "avg", "max", "mdev"):
+            mong_doi.add(f'bpo_ping_rtt_{khoa}_ms{{provider="{nha_mang}"}} {rtt[khoa]}')
+    mat_goi = trang_thai["packet_loss_percent"][nha_mang]
+    if isinstance(mat_goi, (int, float)) and math.isfinite(mat_goi):
+        mong_doi.add(f'bpo_packet_loss_percent{{provider="{nha_mang}"}} {mat_goi}')
 for dich_vu in ("crm", "cfono"):
     file_pid = f"/tmp/bpo_{dich_vu}.pid"
     try:

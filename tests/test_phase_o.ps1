@@ -577,7 +577,7 @@ ChayTinhHuong "O-08" "Chất lượng đường truyền FPT suy giảm" {
     param($Dong, $Ctx)
     GuiMininet "r1 tc qdisc replace dev r1-eth1 root netem delay 180ms loss 40%"
     if (-not (Cho {
-        $Tre = GiaTriProm 'bpo_latency_ms{provider="fpt"}'
+        $Tre = GiaTriProm 'bpo_ping_rtt_avg_ms{provider="fpt"}'
         $Mat = GiaTriProm 'bpo_packet_loss_percent{provider="fpt"}'
         $Link = GiaTriProm 'bpo_link_up{provider="fpt"}'
         $null -ne $Tre -and $null -ne $Mat -and $Tre -gt 100 -and $Mat -gt 20 -and $Link -eq 1
@@ -598,7 +598,7 @@ ChayTinhHuong "O-08" "Chất lượng đường truyền FPT suy giảm" {
         throw "Hai cảnh báo chất lượng tạo sai số phiếu GLPI."
     }
     if (-not (Cho {
-        (GrafanaProm 'bpo_latency_ms{provider="fpt"}') -gt 100 -and
+        (GrafanaProm 'bpo_ping_rtt_avg_ms{provider="fpt"}') -gt 100 -and
         (GrafanaProm 'bpo_packet_loss_percent{provider="fpt"}') -gt 20
     } 30 2)) { throw "Grafana datasource chưa đọc được hai metric suy giảm thực tế." }
     GuiMininet "r1 tc qdisc del dev r1-eth1 root"

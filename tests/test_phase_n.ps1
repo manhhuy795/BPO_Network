@@ -87,7 +87,13 @@ try {
     }
     KiemTra "Dashboard được nạp tự động với 19 panel" {
         $script:DashboardApi = Invoke-RestMethod http://localhost:3000/api/dashboards/uid/bpo-network-overview -Headers $GrafanaHeader
-        $script:DashboardApi.dashboard.uid -eq "bpo-network-overview" -and $script:DashboardApi.dashboard.panels.Count -eq 19
+        $PanelRtt = $script:DashboardApi.dashboard.panels | Where-Object { $_.id -eq 13 }
+        $BieuThucRtt = @($PanelRtt.targets | ForEach-Object { $_.expr })
+        $MetricRtt = @("bpo_ping_rtt_min_ms", "bpo_ping_rtt_avg_ms", "bpo_ping_rtt_max_ms", "bpo_ping_rtt_mdev_ms")
+        $script:DashboardApi.dashboard.uid -eq "bpo-network-overview" -and
+            $script:DashboardApi.dashboard.panels.Count -eq 19 -and
+            @($MetricRtt | Where-Object { $_ -notin $BieuThucRtt }).Count -eq 0 -and
+            "bpo_latency_ms" -notin $BieuThucRtt
     }
     KiemTra "Mọi panel dùng Prometheus hoặc PostgreSQL, không dùng dữ liệu thử cố định" {
         $Json = Get-Content $DashboardFile -Raw -Encoding utf8 | ConvertFrom-Json

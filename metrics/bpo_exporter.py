@@ -116,17 +116,26 @@ def tao_metrics():
         if la_so(trang_thai.get(khoa)):
             cac_dong.append(dong_metric(ten_metric, trang_thai[khoa]))
 
-    for khoa, ten_metric in (
-        ("latency_ms", "bpo_latency_ms"),
-        ("packet_loss_percent", "bpo_packet_loss_percent"),
-    ):
-        du_lieu = trang_thai.get(khoa)
-        if isinstance(du_lieu, dict):
-            for nha_mang in ("fpt", "viettel"):
-                if la_so(du_lieu.get(nha_mang)):
-                    cac_dong.append(dong_metric(
-                        ten_metric, du_lieu[nha_mang], {"provider": nha_mang}
-                    ))
+    rtt = trang_thai.get("ping_rtt_ms")
+    if isinstance(rtt, dict):
+        for nha_mang in ("fpt", "viettel"):
+            thong_ke = rtt.get(nha_mang)
+            if isinstance(thong_ke, dict):
+                for khoa in ("min", "avg", "max", "mdev"):
+                    if la_so(thong_ke.get(khoa)):
+                        cac_dong.append(dong_metric(
+                            f"bpo_ping_rtt_{khoa}_ms", thong_ke[khoa],
+                            {"provider": nha_mang},
+                        ))
+
+    mat_goi = trang_thai.get("packet_loss_percent")
+    if isinstance(mat_goi, dict):
+        for nha_mang in ("fpt", "viettel"):
+            if la_so(mat_goi.get(nha_mang)):
+                cac_dong.append(dong_metric(
+                    "bpo_packet_loss_percent", mat_goi[nha_mang],
+                    {"provider": nha_mang},
+                ))
 
     for ten, file_pid in FILE_PID_DICH_VU.items():
         cac_dong.append(dong_metric(

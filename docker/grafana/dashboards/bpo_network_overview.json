@@ -93,9 +93,14 @@
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true }
     },
     {
-      "id": 13, "type": "timeseries", "title": "Độ trễ FPT và Viettel", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 13, "type": "timeseries", "title": "RTT FPT và Viettel", "description": "mdev là độ biến thiên RTT trong môi trường lab; không phải jitter RTP hoặc jitter VoIP chính xác.", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "bpo-prometheus" },
-      "targets": [{ "expr": "bpo_latency_ms", "legendFormat": "{{provider}}", "refId": "A" }],
+      "targets": [
+        { "expr": "bpo_ping_rtt_min_ms", "legendFormat": "{{provider}} min", "refId": "A" },
+        { "expr": "bpo_ping_rtt_avg_ms", "legendFormat": "{{provider}} avg", "refId": "B" },
+        { "expr": "bpo_ping_rtt_max_ms", "legendFormat": "{{provider}} max", "refId": "C" },
+        { "expr": "bpo_ping_rtt_mdev_ms", "legendFormat": "{{provider}} mdev", "refId": "D" }
+      ],
       "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12, "showPoints": "never", "spanNulls": true }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 100 }, { "color": "red", "value": 200 }] } }, "overrides": [] },
       "options": { "legend": { "calcs": ["lastNotNull", "mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
     },

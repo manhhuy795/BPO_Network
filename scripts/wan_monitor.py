@@ -27,30 +27,75 @@ def thoi_gian_hien_tai():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def phan_tich_ping(noi_dung):
+    """Đọc reachability, packet loss và dòng thống kê RTT của ping."""
+    so = r"\d+(?:\.\d+)?"
+    khop_mat_goi = re.search(rf"({so})%\s+packet loss", noi_dung)
+    if not khop_mat_goi:
+        raise ValueError("Không tìm thấy thống kê packet loss.")
+
+    mat_goi = float(khop_mat_goi.group(1))
+    if not 0 <= mat_goi <= 100:
+        raise ValueError("Giá trị packet loss nằm ngoài khoảng 0-100%.")
+
+    if mat_goi == 100:
+        rtt = None
+    else:
+        khop_rtt = re.search(
+            rf"^rtt min/avg/max/mdev\s*=\s*"
+            rf"({so})/({so})/({so})/({so})\s+ms"
+            rf"(?:,\s+pipe\s+\d+)?$",
+            noi_dung,
+            re.MULTILINE,
+        )
+        if not khop_rtt:
+            raise ValueError("Không tìm thấy dòng thống kê RTT min/avg/max/mdev.")
+        rtt = dict(zip(
+            ("min", "avg", "max", "mdev"),
+            map(float, khop_rtt.groups()),
+        ))
+
+    return {
+        "reachable": mat_goi < 100,
+        "packet_loss_percent": mat_goi,
+        "rtt_ms": rtt,
+    }
+
+
 def do_duong(giao_dien, dia_chi):
-    """Trả về trạng thái, độ trễ và tỷ lệ mất gói thật của WAN."""
-    ket_qua = subprocess.run(
-        # Đo nhiều gói để phân biệt suy giảm chất lượng với mất hẳn đường truyền.
-        [
-            "ping", "-I", giao_dien, "-c", "100", "-i", "0.01",
-            "-W", "1", dia_chi,
-        ],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "LC_ALL": "C"},
-        check=False,
-    )
+    """Chạy ping và trả kết quả đo; lỗi không làm dừng monitor."""
+    try:
+        ket_qua = subprocess.run(
+            # Đo nhiều gói để phân biệt suy giảm chất lượng với mất hẳn đường truyền.
+            [
+                "ping", "-I", giao_dien, "-c", "100", "-i", "0.01",
+                "-W", "1", dia_chi,
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "LC_ALL": "C"},
+            check=False,
+        )
+    except OSError as loi:
+        thong_bao = f"Không chạy được ping trên {giao_dien}: {loi}"
+        print(f"[CẢNH BÁO] {thong_bao}", flush=True)
+        return {
+            "reachable": False, "packet_loss_percent": None,
+            "rtt_ms": None, "error": thong_bao,
+        }
+
     noi_dung = f"{ket_qua.stdout}\n{ket_qua.stderr}"
-    khop_mat_goi = re.search(r"([\d.]+)% packet loss", noi_dung)
-    khop_do_tre = re.search(r"time[=<]([\d.]+)\s*ms", noi_dung)
-    mat_goi = (
-        float(khop_mat_goi.group(1))
-        if khop_mat_goi
-        else (0.0 if ket_qua.returncode == 0 else 100.0)
-    )
-    do_tre = float(khop_do_tre.group(1)) if khop_do_tre else None
-    # ping có thể trả mã 1 khi mất một phần gói; chỉ coi link mất khi 100% gói mất.
-    return mat_goi < 100.0, do_tre, mat_goi
+    try:
+        do_duoc = phan_tich_ping(noi_dung)
+        do_duoc["error"] = None
+        return do_duoc
+    except ValueError as loi:
+        thong_bao = f"Output ping trên {giao_dien} không hợp lệ: {loi}"
+        print(f"[CẢNH BÁO] {thong_bao}", flush=True)
+        return {
+            "reachable": False, "packet_loss_percent": None,
+            "rtt_ms": None, "error": thong_bao,
+        }
 
 
 def dat_route(duong):
@@ -129,8 +174,9 @@ def main():
         "failback_at": None,
         "failover_duration_seconds": None,
         "failback_duration_seconds": None,
-        "latency_ms": {"fpt": None, "viettel": None},
+        "ping_rtt_ms": {"fpt": None, "viettel": None},
         "packet_loss_percent": {"fpt": None, "viettel": None},
+        "ping_error": {"fpt": None, "viettel": None},
         "fpt_failure_count": 0,
         "fpt_recovery_count": 0,
         "viettel_failure_count": 0,
@@ -145,10 +191,12 @@ def main():
     while DANG_CHAY:
         moc_do = time.monotonic()
         luc_kiem_tra = thoi_gian_hien_tai()
-        fpt_tot, do_tre_fpt, mat_goi_fpt = do_duong("r1-eth1", "100.64.30.2")
-        viettel_tot, do_tre_viettel, mat_goi_viettel = do_duong(
+        ket_qua_fpt = do_duong("r1-eth1", "100.64.30.2")
+        ket_qua_viettel = do_duong(
             "r1-eth2", "100.64.40.2"
         )
+        fpt_tot = ket_qua_fpt["reachable"]
+        viettel_tot = ket_qua_viettel["reachable"]
         dang_dung = trang_thai["active_wan"]
 
         if dang_dung == "fpt":
@@ -226,10 +274,17 @@ def main():
                 "checked_at": luc_kiem_tra,
                 "fpt_up": fpt_tot,
                 "viettel_up": viettel_tot,
-                "latency_ms": {"fpt": do_tre_fpt, "viettel": do_tre_viettel},
+                "ping_rtt_ms": {
+                    "fpt": ket_qua_fpt["rtt_ms"],
+                    "viettel": ket_qua_viettel["rtt_ms"],
+                },
                 "packet_loss_percent": {
-                    "fpt": mat_goi_fpt,
-                    "viettel": mat_goi_viettel,
+                    "fpt": ket_qua_fpt["packet_loss_percent"],
+                    "viettel": ket_qua_viettel["packet_loss_percent"],
+                },
+                "ping_error": {
+                    "fpt": ket_qua_fpt["error"],
+                    "viettel": ket_qua_viettel["error"],
                 },
                 "fpt_failure_count": so_lan_fpt_mat,
                 "fpt_recovery_count": so_lan_fpt_tot,

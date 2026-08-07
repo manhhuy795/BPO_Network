@@ -347,7 +347,10 @@ bpo_wan_monitor_up
 bpo_link_up
 bpo_active_link
 bpo_service_up
-bpo_latency_ms
+bpo_ping_rtt_min_ms
+bpo_ping_rtt_avg_ms
+bpo_ping_rtt_max_ms
+bpo_ping_rtt_mdev_ms
 bpo_packet_loss_percent
 ALERTS
 ```
@@ -363,6 +366,18 @@ Các metric kiểm tra độ tin cậy của dữ liệu WAN:
 | `bpo_wan_monitor_up` | Bằng `1` khi file đọc được, timestamp không ở tương lai và tuổi dữ liệu không quá 10 giây. |
 
 `wan_monitor.py` chạy mỗi 2 giây. Ngưỡng stale là 10 giây, tương đương bỏ lỡ 5 chu kỳ liên tiếp. `WANMonitorDown` dùng cho lỗi đọc/JSON; `WANStatusStale` dùng cho JSON đọc được nhưng timestamp thiếu, ở tương lai hoặc quá cũ. Hai alert được thiết kế không firing trùng nhau.
+
+Các metric chất lượng WAN được đọc từ dòng thống kê cuối của lệnh ping, đơn vị RTT là milliseconds và mất gói là percent:
+
+| Metric | Ý nghĩa |
+|---|---|
+| `bpo_ping_rtt_min_ms` | RTT nhỏ nhất trong lần đo. |
+| `bpo_ping_rtt_avg_ms` | RTT trung bình; `HighLatency` dùng metric này với ngưỡng hiện có `>100 ms` trong 30 giây. |
+| `bpo_ping_rtt_max_ms` | RTT lớn nhất trong lần đo. |
+| `bpo_ping_rtt_mdev_ms` | Độ biến thiên RTT trong môi trường lab. Không phải jitter RTP hoặc jitter VoIP chính xác. |
+| `bpo_packet_loss_percent` | Tỷ lệ gói ping bị mất trong lần đo. |
+
+Failover hiện dựa trên reachability, không dựa trên chất lượng đường truyền. Mất gói `0%`, `20%`, `80%` hoặc `99%` vẫn được xem là link UP; chỉ `100% packet loss` mới được tính là một lần WAN DOWN. Chính sách vẫn cần 3 lần DOWN liên tiếp trước khi chuyển đường.
 
 Mở http://localhost:9090/targets để kiểm tra target `bpo_exporter` có trạng thái `UP`.
 

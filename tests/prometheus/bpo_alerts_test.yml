@@ -71,11 +71,11 @@ tests:
         values: '0x12'
       - series: 'bpo_link_up{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
         values: '1x12'
-      - series: 'bpo_latency_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+      - series: 'bpo_ping_rtt_avg_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
         values: '200x12'
       - series: 'bpo_packet_loss_percent{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
         values: '50x12'
-      - series: 'bpo_latency_ms{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+      - series: 'bpo_ping_rtt_avg_ms{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
         values: '200x12'
       - series: 'bpo_packet_loss_percent{provider="viettel",job="bpo_exporter",instance="ubuntu-vm:9105"}'
         values: '50x12'
@@ -89,3 +89,48 @@ tests:
       - eval_time: 45s
         alertname: HighPacketLoss
         exp_alerts: []
+
+  - name: Metric latency cũ không còn kích hoạt HighLatency
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_wan_monitor_up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_link_up{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_latency_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '200x12'
+      - series: 'bpo_ping_rtt_avg_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '50x12'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: HighLatency
+        exp_alerts: []
+
+  - name: RTT trung bình cao kích hoạt HighLatency
+    interval: 5s
+    input_series:
+      - series: 'up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_wan_monitor_up{job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_link_up{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '1x12'
+      - series: 'bpo_ping_rtt_avg_ms{provider="fpt",job="bpo_exporter",instance="ubuntu-vm:9105"}'
+        values: '150x12'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: HighLatency
+        exp_alerts:
+          - exp_labels:
+              alertname: HighLatency
+              category: performance
+              instance: ubuntu-vm:9105
+              job: bpo_exporter
+              provider: fpt
+              severity: thap
+            exp_annotations:
+              summary: Độ trễ WAN cao
+              description: RTT trung bình tuyến fpt vượt 100 ms trong khi link vẫn UP.
+              suspected_cause: Tuyến nhà mạng nghẽn, định tuyến vòng hoặc chất lượng kết nối suy giảm.

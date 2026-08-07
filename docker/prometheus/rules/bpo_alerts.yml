@@ -113,7 +113,7 @@ groups:
 
       - alert: HighLatency
         expr: |
-          (bpo_latency_ms > 100)
+          (bpo_ping_rtt_avg_ms > 100)
           and on(instance, job, provider) (bpo_link_up == 1)
           and on(instance, job) (bpo_wan_monitor_up == 1)
           and on(instance, job) (up{job="bpo_exporter"} == 1)
@@ -123,5 +123,5 @@ groups:
           category: performance
         annotations:
           summary: "Độ trễ WAN cao"
-          description: "Độ trễ tuyến {{ $labels.provider }} vượt 100 ms trong khi link vẫn UP."
+          description: "RTT trung bình tuyến {{ $labels.provider }} vượt 100 ms trong khi link vẫn UP."
           suspected_cause: "Tuyến nhà mạng nghẽn, định tuyến vòng hoặc chất lượng kết nối suy giảm."

@@ -29,7 +29,7 @@ Chất lượng và chuyển đường:
 10. Failback gần nhất.
 11. Số lần FPT gặp lỗi trong khoảng thời gian đang xem.
 12. Số lần chuyển sang Viettel trong khoảng thời gian đang xem.
-13. Độ trễ FPT và Viettel.
+13. RTT min/avg/max/mdev của FPT và Viettel.
 14. Tỷ lệ mất gói.
 15. Lịch sử thời gian failover và failback.
 
@@ -41,6 +41,8 @@ Sự cố và thống kê:
 19. Thời gian xử lý trung bình.
 
 Không panel nào dùng Grafana TestData hoặc số liệu nhập cố định. Hai bộ đếm lỗi FPT/chuyển Viettel được suy ra từ số lần thay đổi metric trong khoảng thời gian dashboard; đây là phép đếm từ chuỗi thời gian thật, không phải bộ đếm tích lũy vĩnh viễn.
+
+`bpo_ping_rtt_mdev_ms` biểu diễn độ biến thiên RTT trong môi trường lab. Không coi đây là jitter RTP hoặc jitter VoIP chính xác.
 
 ## Tài khoản
 
