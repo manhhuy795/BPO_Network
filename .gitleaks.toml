@@ -1,7 +1,7 @@
 [extend]
 useDefault = true
 
-[[allowlists]]
+[allowlist]
 description = "Giá trị mẫu và định danh kiểm thử đã xác minh không phải secret"
 regexTarget = "secret"
 regexes = [
