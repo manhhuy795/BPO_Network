@@ -12,7 +12,7 @@ services:
     extra_hosts:
       - "ubuntu-vm:${UBUNTU_VM_IP}"
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
@@ -35,7 +35,7 @@ services:
     extra_hosts:
       - "ubuntu-vm:${UBUNTU_VM_IP}"
     ports:
-      - "9115:9115"
+      - "127.0.0.1:9115:9115"
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
     healthcheck:
@@ -51,13 +51,23 @@ services:
     image: prom/alertmanager:v0.33.1
     container_name: bpo-alertmanager
     restart: unless-stopped
+    environment:
+      ALERTMANAGER_WEBHOOK_TOKEN: ${ALERTMANAGER_WEBHOOK_TOKEN:?Hãy đặt ALERTMANAGER_WEBHOOK_TOKEN trong .env}
+    entrypoint: ["/bin/sh", "-ec"]
     command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
-      - --storage.path=/alertmanager
+      - |-
+        test "$${#ALERTMANAGER_WEBHOOK_TOKEN}" -ge 32
+        case "$${ALERTMANAGER_WEBHOOK_TOKEN}" in
+          *[!A-Za-z0-9_-]*) echo "ALERTMANAGER_WEBHOOK_TOKEN không hợp lệ" >&2; exit 1 ;;
+        esac
+        sed "s|__BPO_ALERTMANAGER_WEBHOOK_TOKEN__|$${ALERTMANAGER_WEBHOOK_TOKEN}|g" \
+          /etc/alertmanager/alertmanager.template.yml >/tmp/alertmanager.yml
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml \
+          --storage.path=/alertmanager
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.template.yml:ro
       - alertmanager_data:/alertmanager
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:9093/-/healthy || exit 1"]
@@ -101,8 +111,8 @@ services:
       PGDATABASE: ${POSTGRES_DB}
       PGUSER: ${POSTGRES_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD}
-      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-bpo_grafana}
-      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:?Hãy đặt GRAFANA_DB_USER trong .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?Hãy đặt GRAFANA_DB_PASSWORD trong .env}
     volumes:
       - ../database/init:/database/init:ro
       - ../database/migrations:/database/migrations:ro
@@ -133,6 +143,7 @@ services:
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_POSTGRESDB_SCHEMA: n8n
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      ALERTMANAGER_WEBHOOK_TOKEN: ${ALERTMANAGER_WEBHOOK_TOKEN:?Hãy đặt ALERTMANAGER_WEBHOOK_TOKEN trong .env}
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
@@ -157,7 +168,7 @@ services:
       GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
       TZ: Asia/Ho_Chi_Minh
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
     healthcheck:
@@ -232,7 +243,7 @@ services:
       GLPI_CRONTAB_ENABLED: 1
       TZ: Asia/Ho_Chi_Minh
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - glpi_data:/var/glpi
     healthcheck:
@@ -304,17 +315,17 @@ services:
     container_name: bpo-grafana
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${N8N_OWNER_PASSWORD}}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Hãy đặt GRAFANA_ADMIN_USER trong .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Hãy đặt GRAFANA_ADMIN_PASSWORD trong .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       POSTGRES_DB: ${POSTGRES_DB}
-      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-bpo_grafana}
-      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:?Hãy đặt GRAFANA_DB_USER trong .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?Hãy đặt GRAFANA_DB_PASSWORD trong .env}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

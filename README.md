@@ -8,7 +8,13 @@ Tên đề tài:
 
 Dự án mô phỏng hệ thống mạng tại trụ sở chính của doanh nghiệp BPO/Call Center. Hệ thống phát hiện lỗi mạng và dịch vụ, chuyển đường Internet dự phòng, gom nhiều cảnh báo liên quan thành một sự cố, lưu dữ liệu, tạo phiếu GLPI và hiển thị trên Grafana.
 
-Các Giai đã hoàn thành trong môi trường lab. Kiểm thử tích hợp cuối đạt **9/9 tình huống, exit code 0**.
+> Lab system, not production-ready.
+>
+> Rule-based topology correlation.
+>
+> Suspected root cause.
+
+Hệ thống tương quan theo quy tắc, ánh xạ alert và quan hệ phụ thuộc topology. Nguyên nhân được ghi là nguyên nhân nghi ngờ, không phải kết luận tuyệt đối.
 
 ## 2. Phạm vi
 
@@ -130,7 +136,7 @@ Không gửi file `.env`, không chụp ảnh màn hình có mật khẩu và kh
 | Hệ thống | Tài khoản | Mật khẩu |
 |---|---|---|
 | n8n | Giá trị `N8N_OWNER_EMAIL`, mẫu: `admin@bpo.local` | Giá trị `N8N_OWNER_PASSWORD` trong `.env` |
-| Grafana | `GRAFANA_ADMIN_USER`, mặc định `admin` | `GRAFANA_ADMIN_PASSWORD`; nếu biến này không có thì dùng `N8N_OWNER_PASSWORD` |
+| Grafana | Giá trị bắt buộc `GRAFANA_ADMIN_USER` | Giá trị riêng `GRAFANA_ADMIN_PASSWORD` trong `.env` |
 | GLPI Web/API | `GLPI_API_USER`, mẫu: `glpi` | `GLPI_API_PASSWORD` trong `.env` |
 | PostgreSQL | `POSTGRES_USER`, mẫu: `bpo_app` | `POSTGRES_PASSWORD` trong `.env`; chỉ dùng nội bộ Docker |
 | MySQL của GLPI | `GLPI_DB_USER`, mẫu: `glpi` | `GLPI_DB_PASSWORD` trong `.env`; chỉ dùng nội bộ Docker |
@@ -205,6 +211,7 @@ UBUNTU_SSH_KEY=C:/Users/huy/.ssh/manhhuy
 
 POSTGRES_PASSWORD=...
 N8N_ENCRYPTION_KEY=...
+ALERTMANAGER_WEBHOOK_TOKEN=...
 N8N_OWNER_PASSWORD=...
 GLPI_DB_PASSWORD=...
 GLPI_DB_ROOT_PASSWORD=...
@@ -404,6 +411,8 @@ Webhook production:
 ```text
 http://n8n:5678/webhook/bpo-alertmanager
 ```
+
+Alertmanager gửi header `Authorization: Bearer ...`; token lấy từ `ALERTMANAGER_WEBHOOK_TOKEN` trong `.env`. Request thiếu hoặc sai token bị từ chối trước khi payload được xử lý. Token chỉ dùng ký tự `A-Z`, `a-z`, `0-9`, `_`, `-` và dài tối thiểu 32 ký tự.
 
 ### PostgreSQL
 
@@ -707,20 +716,22 @@ probe_success{service=~"crm|cfono"}
 
 ### n8n báo webhook `bpo-alertmanager` chưa đăng ký
 
-Kiểm tra workflow đang active. Nếu database active nhưng webhook vẫn trả 404:
+Kiểm tra workflow đang active. Khi file workflow thay đổi, cập nhật bản đang lưu trong volume rồi restart n8n để registry webhook nạp lại:
 
 ```powershell
-docker compose --env-file .env -f docker/docker-compose.yml up -d --no-deps --force-recreate n8n-config
-docker compose --env-file .env -f docker/docker-compose.yml restart n8n
+docker compose --env-file .env -f docker/docker-compose.yml stop n8n
+docker compose --env-file .env -f docker/docker-compose.yml run --rm --entrypoint n8n n8n-config import:workflow --input=/bootstrap/workflows/bpo_alert_correlation.json
+docker compose --env-file .env -f docker/docker-compose.yml run --rm --entrypoint n8n n8n-config publish:workflow --id=bpoAlertFlow01
+docker compose --env-file .env -f docker/docker-compose.yml up -d n8n
 ```
 
-Bootstrap hiện không import lại hai workflow nếu chúng đã active, tránh làm registry webhook runtime bị cũ.
+Workflow notification không cần import lại nếu file đó không thay đổi.
 
 ### Không đăng nhập được Grafana
 
-- Tài khoản mặc định: `admin` hoặc giá trị `GRAFANA_ADMIN_USER`.
+- Tài khoản là giá trị bắt buộc `GRAFANA_ADMIN_USER`.
 - Xem mật khẩu trong `GRAFANA_ADMIN_PASSWORD`.
-- Nếu biến này không tồn tại, thử giá trị `N8N_OWNER_PASSWORD`.
+- Không có fallback sang mật khẩu n8n.
 - Nếu volume Grafana đã được khởi tạo, việc đổi `.env` không tự đổi mật khẩu hiện có.
 
 ### Container khởi tạo ở trạng thái `Exited (0)`
@@ -732,12 +743,15 @@ Bootstrap hiện không import lại hai workflow nếu chúng đã active, trá
 Kiểm thử tích hợp cuối:
 
 - O-01 đến O-09: **9/9 ĐẠT**.
+- O-10 đến O-16: **7/7 ĐẠT**.
+- Bảo mật và CI Giai đoạn 11: **10/10 ĐẠT**.
 - Tỷ lệ: **100%**.
 - Exit code: **0**.
-- Phát hiện trung bình: **7,712 giây**.
-- Tạo/cập nhật incident trung bình: **18,502 giây**.
+- Phát hiện trung bình: **9,162 giây**.
+- Tạo/cập nhật incident trung bình: **23,025 giây**.
+- Tạo/cập nhật ticket trung bình: **23,431 giây**.
 - Failover: **4,002 giây**.
-- Failback: **8,775 giây**.
+- Failback: **8,777 giây**.
 - Incident đang mở sau kiểm thử: **0**.
 
 Xem báo cáo đầy đủ tại [docs/phase_o_result.md](docs/phase_o_result.md) và các hạn chế tại [docs/phase_o_limitations.md](docs/phase_o_limitations.md).
@@ -748,9 +762,9 @@ Xem báo cáo đầy đủ tại [docs/phase_o_result.md](docs/phase_o_result.md
 - CRM/CFONO là HTTP server Python mô phỏng.
 - Probe HTTP đại diện cho đường truy cập từ `pc_du_an_1`; chưa kiểm tra đồng thời từ mọi VLAN hoặc vị trí người dùng.
 - Dual-WAN là mô phỏng Mininet, không phải hai ISP vật lý.
-- Tương quan n8n dùng quy tắc tĩnh và cửa sổ 120 giây.
-- Hệ thống chưa có HA, backup tự động, TLS, SSO hoặc kiểm thử tải lớn.
-- Prometheus, Alertmanager và Blackbox Exporter chưa có xác thực trong lab.
+- Tương quan dùng quy tắc topology, alert mapping và cửa sổ 120 giây; kết quả chỉ là nguyên nhân nghi ngờ.
+- Hệ thống chưa có HA, TLS, SSO hoặc lịch backup tự động.
+- Webhook Alertmanager → n8n có Bearer token; các UI Docker chỉ bind `127.0.0.1`, nhưng Prometheus, Alertmanager và Blackbox Exporter chưa có đăng nhập riêng.
 - Grafana được kiểm chứng tự động bằng API/datasource, chưa chụp ảnh trình duyệt.
 
-Hệ thống phù hợp để trình diễn và bảo vệ đề tài trong môi trường lab; chưa nên dùng trực tiếp cho production nếu chưa xử lý các hạn chế trên.
+Hệ thống phù hợp để trình diễn và bảo vệ đề tài trong môi trường lab; không sẵn sàng cho production.

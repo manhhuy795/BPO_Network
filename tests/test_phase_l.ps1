@@ -37,6 +37,8 @@ function Lay-Bien([string]$Ten) {
 $PostgresDb = Lay-Bien "POSTGRES_DB"
 $PostgresUser = Lay-Bien "POSTGRES_USER"
 $PostgresPassword = Lay-Bien "POSTGRES_PASSWORD"
+$WebhookToken = Lay-Bien "ALERTMANAGER_WEBHOOK_TOKEN"
+$WebhookHeaders = @{ Authorization = "Bearer $WebhookToken" }
 $IpUbuntu = Lay-Bien "UBUNTU_VM_IP"
 $SshUser = Lay-Bien "UBUNTU_SSH_USER"
 $SshKey = Lay-Bien "UBUNTU_SSH_KEY"
@@ -114,6 +116,7 @@ function Tao-Payload-PhucHoi($Payload, [int]$DoLechKetThuc = 300) {
 function Gui-Webhook($Payload) {
     $Json = $Payload | ConvertTo-Json -Depth 30 -Compress
     $PhanHoi = Invoke-WebRequest -UseBasicParsing -Uri $Webhook -Method Post `
+        -Headers $WebhookHeaders `
         -ContentType "application/json; charset=utf-8" -Body $Json -TimeoutSec 30
     return [pscustomobject]@{
         StatusCode = [int]$PhanHoi.StatusCode

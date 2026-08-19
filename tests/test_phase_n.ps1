@@ -26,9 +26,10 @@ $PgDb = Bien "POSTGRES_DB"
 $PgUser = Bien "POSTGRES_USER"
 $PgPassword = Bien "POSTGRES_PASSWORD"
 $GrafanaUser = Bien "GRAFANA_ADMIN_USER"
-if (-not $GrafanaUser) { $GrafanaUser = "admin" }
 $GrafanaPassword = Bien "GRAFANA_ADMIN_PASSWORD"
-if (-not $GrafanaPassword) { $GrafanaPassword = Bien "N8N_OWNER_PASSWORD" }
+if (-not $GrafanaUser -or -not $GrafanaPassword) {
+    throw "Thiếu GRAFANA_ADMIN_USER hoặc GRAFANA_ADMIN_PASSWORD trong .env."
+}
 $SshUser = Bien "UBUNTU_SSH_USER"
 $SshIp = Bien "UBUNTU_VM_IP"
 $SshKey = Bien "UBUNTU_SSH_KEY"
@@ -128,16 +129,29 @@ try {
     if (-not (Test-Path $SshKey)) { throw "Không tìm thấy khóa SSH: $SshKey" }
     $BatDauWan = [DateTime]::UtcNow.AddSeconds(-5)
     $MocSql = Sql "SELECT CURRENT_TIMESTAMP;"
-    $LenhVm = "cd $ThuMucVm && sudo -n mn -c >/dev/null 2>&1 || true; printf '%s\n' 'r1 bash scripts/fpt_down.sh' 'sh sleep 25' 'r1 bash scripts/fpt_up.sh' 'sh sleep 20' 'exit' | sudo -n python3 topology/topology_v2_dual_wan.py"
-    $MucLoiCu = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = "Continue"
-        $KetQuaVm = & ssh -i $SshKey -o IdentitiesOnly=yes -o ConnectTimeout=8 "${SshUser}@${SshIp}" $LenhVm 2>&1
-        $MaVm = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $MucLoiCu
+    $LenhKiemTraNen = "test -f /tmp/bpo_phase_o_topology.pid && kill -0 `$(cat /tmp/bpo_phase_o_topology.pid) 2>/dev/null && sudo -n ovs-vsctl br-exists s_core && echo OK"
+    $TopologyNen = (& ssh -i $SshKey -o IdentitiesOnly=yes -o ConnectTimeout=8 "${SshUser}@${SshIp}" $LenhKiemTraNen 2>$null) -eq "OK"
+    if ($TopologyNen) {
+        $Ack = "/tmp/bpo_phase_n_ack_$([guid]::NewGuid().ToString('N'))"
+        $LenhCli = "r1 bash scripts/fpt_down.sh`nsh sleep 25`nr1 bash scripts/fpt_up.sh`nsh sleep 20`nsh touch $Ack`n"
+        $Base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($LenhCli))
+        & ssh -i $SshKey -o IdentitiesOnly=yes "${SshUser}@${SshIp}" "rm -f $Ack; printf '%s' '$Base64' | base64 -d >> /tmp/bpo_phase_o_commands" | Out-Null
+        if ($LASTEXITCODE -ne 0 -or -not (Cho {
+            (& ssh -i $SshKey -o IdentitiesOnly=yes "${SshUser}@${SshIp}" "test -f $Ack && echo OK" 2>$null) -eq "OK"
+        } 70)) { throw "Topology nền không hoàn tất kịch bản FPT down/up." }
+        & ssh -i $SshKey -o IdentitiesOnly=yes "${SshUser}@${SshIp}" "sudo -n rm -f $Ack" | Out-Null
+    } else {
+        $LenhVm = "cd $ThuMucVm && sudo -n mn -c >/dev/null 2>&1 || true; printf '%s\n' 'r1 bash scripts/fpt_down.sh' 'sh sleep 25' 'r1 bash scripts/fpt_up.sh' 'sh sleep 20' 'exit' | sudo -n python3 topology/topology_v2_dual_wan.py"
+        $MucLoiCu = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $KetQuaVm = & ssh -i $SshKey -o IdentitiesOnly=yes -o ConnectTimeout=8 "${SshUser}@${SshIp}" $LenhVm 2>&1
+            $MaVm = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $MucLoiCu
+        }
+        if ($MaVm -ne 0) { throw "Kiểm thử Mininet lỗi ($MaVm): $($KetQuaVm -join ' ')" }
     }
-    if ($MaVm -ne 0) { throw "Kiểm thử Mininet lỗi ($MaVm): $($KetQuaVm -join ' ')" }
     $KetThucWan = [DateTime]::UtcNow.AddSeconds(5)
 
     KiemTra "FPT thực sự chuyển 1 -> 0 -> 1 và Viettel tiếp quản trên dữ liệu dashboard" {

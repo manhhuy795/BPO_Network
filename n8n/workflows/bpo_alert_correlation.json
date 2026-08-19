@@ -18,7 +18,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const input = $input.first().json;\nconst payload = input.body ?? input;\nlet loi = '';\nif (!payload || typeof payload !== 'object' || Array.isArray(payload)) loi = 'Payload phải là một đối tượng JSON.';\nelse if (!Array.isArray(payload.alerts) || payload.alerts.length === 0) loi = 'Trường alerts phải là mảng không rỗng.';\nelse {\n  for (const [index, alert] of payload.alerts.entries()) {\n    const status = alert?.status ?? payload.status;\n    if (!alert || typeof alert !== 'object' || Array.isArray(alert)) { loi = `Cảnh báo thứ ${index + 1} không hợp lệ.`; break; }\n    if (!['firing', 'resolved'].includes(status)) { loi = `Cảnh báo thứ ${index + 1} thiếu trạng thái hợp lệ.`; break; }\n    if (!alert.labels?.alertname || !alert.fingerprint || !alert.startsAt || Number.isNaN(Date.parse(alert.startsAt))) { loi = `Cảnh báo thứ ${index + 1} thiếu alertname, fingerprint hoặc startsAt.`; break; }\n    if (status === 'resolved' && (!alert.endsAt || Number.isNaN(Date.parse(alert.endsAt)))) { loi = `Cảnh báo phục hồi thứ ${index + 1} thiếu endsAt.`; break; }\n  }\n}\nreturn [{ json: loi ? { trang_thai_kiem_tra: 'khong_hop_le', status: 'invalid', thong_bao: loi } : { trang_thai_kiem_tra: 'hop_le', payload } }];"
+        "jsCode": "const input = $input.first().json;\nconst payload = input.body ?? input;\nconst token = String($env.ALERTMANAGER_WEBHOOK_TOKEN ?? '');\nconst authorization = String(input.headers?.authorization ?? '');\nconst authorized = token.length >= 32 && authorization === `Bearer ${token}`;\nlet loi = '';\nif (!authorized) loi = 'Webhook không được phép.';\nelse if (!payload || typeof payload !== 'object' || Array.isArray(payload)) loi = 'Payload phải là một đối tượng JSON.';\nelse if (!Array.isArray(payload.alerts) || payload.alerts.length === 0) loi = 'Trường alerts phải là mảng không rỗng.';\nelse {\n  for (const [index, alert] of payload.alerts.entries()) {\n    const status = alert?.status ?? payload.status;\n    if (!alert || typeof alert !== 'object' || Array.isArray(alert)) { loi = `Cảnh báo thứ ${index + 1} không hợp lệ.`; break; }\n    if (!['firing', 'resolved'].includes(status)) { loi = `Cảnh báo thứ ${index + 1} thiếu trạng thái hợp lệ.`; break; }\n    if (!alert.labels?.alertname || !alert.fingerprint || !alert.startsAt || Number.isNaN(Date.parse(alert.startsAt))) { loi = `Cảnh báo thứ ${index + 1} thiếu alertname, fingerprint hoặc startsAt.`; break; }\n    if (status === 'resolved' && (!alert.endsAt || Number.isNaN(Date.parse(alert.endsAt)))) { loi = `Cảnh báo phục hồi thứ ${index + 1} thiếu endsAt.`; break; }\n  }\n}\nconst status = authorized ? 'invalid' : 'unauthorized';\nreturn [{ json: loi ? { trang_thai_kiem_tra: 'khong_hop_le', status, thong_bao: loi } : { trang_thai_kiem_tra: 'hop_le', payload } }];"
       },
       "id": "c0a8e600-786f-4b0e-b05f-ddc61cd2c502",
       "name": "Kiểm tra payload",
@@ -188,7 +188,7 @@
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
-          "responseCode": 400,
+          "responseCode": "={{ $json.status === 'unauthorized' ? 401 : 400 }}",
           "enableStreaming": false
         }
       },

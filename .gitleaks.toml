@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Giá trị mẫu và định danh kiểm thử đã xác minh không phải secret"
+regexTarget = "secret"
+regexes = [
+  '''^thay_bang_chuoi_ngau_nhien_it_nhat_32_ky_tu$''',
+  '''^p8-duplicate-second$'''
+]

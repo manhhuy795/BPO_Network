@@ -39,10 +39,10 @@ $SshUser = Bien "UBUNTU_SSH_USER"
 $SshIp = Bien "UBUNTU_VM_IP"
 $SshKey = Bien "UBUNTU_SSH_KEY"
 $VmRoot = "/home/$SshUser/BPO_Network"
-$GrafanaUser = Bien "GRAFANA_ADMIN_USER" $false
-if (-not $GrafanaUser) { $GrafanaUser = "admin" }
-$GrafanaPassword = Bien "GRAFANA_ADMIN_PASSWORD" $false
-if (-not $GrafanaPassword) { $GrafanaPassword = Bien "N8N_OWNER_PASSWORD" }
+$GrafanaUser = Bien "GRAFANA_ADMIN_USER"
+$GrafanaPassword = Bien "GRAFANA_ADMIN_PASSWORD"
+$WebhookToken = Bien "ALERTMANAGER_WEBHOOK_TOKEN"
+$WebhookHeaders = @{ Authorization = "Bearer $WebhookToken" }
 $GlpiUser = Bien "GLPI_API_USER"
 $GlpiPassword = Bien "GLPI_API_PASSWORD"
 $Basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${GrafanaUser}:${GrafanaPassword}"))
@@ -391,7 +391,7 @@ function KiemTraTrangThaiBanDau {
         throw "Hai workflow n8n chưa active."
     }
     try {
-        $null = Invoke-RestMethod $Webhook -Method Post -ContentType "application/json" `
+        $null = Invoke-RestMethod $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json" `
             -Body '{"receiver":"phase-o-precheck","status":"resolved","alerts":[]}' -TimeoutSec 15
     } catch {
         $MaHttp = $null
@@ -639,8 +639,8 @@ ChayTinhHuong "O-07" "Cảnh báo trùng" {
     $AlertCountTruoc = [int](Sql "SELECT COALESCE(sum(alert_count),0) FROM incidents;")
     $ThongBaoTruoc = [int](Sql "SELECT count(*) FROM notification_events;")
     $PhieuTruoc = [int](Sql "SELECT count(*) FROM incident_integrations;")
-    $TraVe1 = Invoke-RestMethod $Webhook -Method Post -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
-    $TraVe2 = Invoke-RestMethod $Webhook -Method Post -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
+    $TraVe1 = Invoke-RestMethod $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
+    $TraVe2 = Invoke-RestMethod $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json; charset=utf-8" -Body $PayloadJson -TimeoutSec 30
     Start-Sleep -Seconds 5
     $SoDuplicate = @($TraVe1, $TraVe2 | Where-Object { $_.status -eq "duplicate" }).Count
     $RawSau = [int](Sql "SELECT count(*) FROM raw_alerts;")

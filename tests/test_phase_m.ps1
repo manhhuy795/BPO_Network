@@ -29,6 +29,8 @@ $PgPassword = Bien "POSTGRES_PASSWORD"
 $EmailMode = Bien "EMAIL_MODE"
 $GlpiUser = Bien "GLPI_API_USER"
 $GlpiPassword = Bien "GLPI_API_PASSWORD"
+$WebhookToken = Bien "ALERTMANAGER_WEBHOOK_TOKEN"
+$WebhookHeaders = @{ Authorization = "Bearer $WebhookToken" }
 
 function Sql([string]$CauLenh) {
     $env:PGPASSWORD = $PgPassword
@@ -75,7 +77,7 @@ function Payload($Alert, [string]$TrangThai = "firing") {
 }
 
 function Gui($DuLieu) {
-    return Invoke-RestMethod -Uri $Webhook -Method Post -ContentType "application/json; charset=utf-8" `
+    return Invoke-RestMethod -Uri $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json; charset=utf-8" `
         -Body ($DuLieu | ConvertTo-Json -Depth 12 -Compress) -TimeoutSec 30
 }
 

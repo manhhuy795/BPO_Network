@@ -46,4 +46,4 @@ Không panel nào dùng Grafana TestData hoặc số liệu nhập cố định.
 
 ## Tài khoản
 
-Tên người dùng mặc định là `admin`. Mật khẩu lấy từ `GRAFANA_ADMIN_PASSWORD`; nếu biến này chưa có, cấu hình lab dùng giá trị `N8N_OWNER_PASSWORD`. Nên đặt mật khẩu Grafana riêng trong `.env` trước khi trình diễn ngoài máy cá nhân.
+Tên người dùng lấy từ `GRAFANA_ADMIN_USER`, mật khẩu lấy riêng từ `GRAFANA_ADMIN_PASSWORD`. Hai biến đều bắt buộc; cấu hình không còn fallback sang mật khẩu n8n.

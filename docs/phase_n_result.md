@@ -76,4 +76,4 @@ Log gốc: `logs/phase_n_test.log`.
 - Chưa có SMTP thật; email chỉ ở chế độ `log`.
 - CRM/CFONO hiển thị `MẤT` khi topology Mininet đã dừng, vì hai HTTP server thuộc namespace Mininet.
 - Không có phiên trình duyệt tích hợp để chụp ảnh dashboard; QA cuối dùng Grafana API, datasource health, truy vấn dữ liệu và mô hình 19 panel.
-- Nếu chưa khai báo biến Grafana riêng, tài khoản quản trị dùng mật khẩu fallback từ n8n; nên tách mật khẩu khi triển khai ngoài lab.
+- `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_DB_USER` và `GRAFANA_DB_PASSWORD` đều bắt buộc; không còn fallback sang mật khẩu n8n hoặc PostgreSQL nghiệp vụ.

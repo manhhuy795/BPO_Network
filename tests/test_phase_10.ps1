@@ -24,6 +24,8 @@ function Env([string]$Name) {
 $Database = Env "POSTGRES_DB"
 $User = Env "POSTGRES_USER"
 $Password = Env "POSTGRES_PASSWORD"
+$WebhookToken = Env "ALERTMANAGER_WEBHOOK_TOKEN"
+$WebhookHeaders = @{ Authorization = "Bearer $WebhookToken" }
 $ComposeArgs = @("compose", "--env-file", $EnvFile, "-f", $Compose)
 
 function Sql([string]$Query) {
@@ -64,7 +66,7 @@ function Wait-Healthy([string]$Container, [int]$Seconds = 90) {
 function Wait-Webhook([int]$Seconds = 90) {
     return Wait-Until {
         try {
-            Invoke-WebRequest $Webhook -Method Post -ContentType "application/json" `
+            Invoke-WebRequest $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json" `
                 -Body '{"alerts":[]}' -TimeoutSec 5 | Out-Null
             return $true
         } catch {
@@ -98,7 +100,7 @@ function Body([array]$Alerts) {
 }
 
 function Post([array]$Alerts, [int]$Timeout = 120) {
-    return Invoke-RestMethod $Webhook -Method Post -ContentType "application/json" `
+    return Invoke-RestMethod $Webhook -Method Post -Headers $WebhookHeaders -ContentType "application/json" `
         -Body (Body $Alerts) -TimeoutSec $Timeout
 }
 
@@ -217,10 +219,10 @@ try {
         $Json = Body @($Alert)
         $Watch = [Diagnostics.Stopwatch]::StartNew()
         $Jobs = 1..10 | ForEach-Object {
-            Start-Job -ArgumentList $Webhook, $Json -ScriptBlock {
-                param($Url, $Payload)
+            Start-Job -ArgumentList $Webhook, $Json, $WebhookToken -ScriptBlock {
+                param($Url, $Payload, $Token)
                 try {
-                    $Response = Invoke-RestMethod $Url -Method Post -ContentType "application/json" -Body $Payload -TimeoutSec 60
+                    $Response = Invoke-RestMethod $Url -Method Post -Headers @{ Authorization = "Bearer $Token" } -ContentType "application/json" -Body $Payload -TimeoutSec 60
                     [pscustomobject]@{ ok = 1; status = $Response.status }
                 } catch { [pscustomobject]@{ ok = 0; status = "error" } }
             }
@@ -298,9 +300,9 @@ try {
         Track $Alerts
         $Json = Body $Alerts
         $Watch = [Diagnostics.Stopwatch]::StartNew()
-        $Job = Start-Job -ArgumentList $Webhook, $Json -ScriptBlock {
-            param($Url, $Payload)
-            try { Invoke-RestMethod $Url -Method Post -ContentType "application/json" -Body $Payload -TimeoutSec 120 | Out-Null; 0 } catch { 1 }
+        $Job = Start-Job -ArgumentList $Webhook, $Json, $WebhookToken -ScriptBlock {
+            param($Url, $Payload, $Token)
+            try { Invoke-RestMethod $Url -Method Post -Headers @{ Authorization = "Bearer $Token" } -ContentType "application/json" -Body $Payload -TimeoutSec 120 | Out-Null; 0 } catch { 1 }
         }
         Start-Sleep -Milliseconds 200
         [void](Invoke-Docker @("restart", "bpo-n8n"))
